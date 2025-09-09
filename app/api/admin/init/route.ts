@@ -10,11 +10,39 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get('Authorization')
     const expectedKey = process.env.INIT_SECRET_KEY
     
-    if (!expectedKey || authHeader !== `Bearer ${expectedKey}`) {
+    if (!expectedKey) {
+      console.error('INIT_SECRET_KEY environment variable is not set')
+      return NextResponse.json(
+        { error: 'Server configuration error: INIT_SECRET_KEY not set' },
+        { status: 500 }
+      )
+    }
+    
+    if (authHeader !== `Bearer ${expectedKey}`) {
       return NextResponse.json(
         { error: 'Unauthorized: Invalid init key' },
         { status: 401 }
       )
+    }
+
+    // 既に初期化済みかチェック
+    const existingUserCount = await prisma.user.count()
+    if (existingUserCount > 0) {
+      console.log('Database already initialized, skipping...')
+      const adminUser = await prisma.user.findFirst({
+        where: { role: 'ADMIN' }
+      })
+      
+      return NextResponse.json({
+        success: true,
+        message: 'データベースは既に初期化されています',
+        alreadyInitialized: true,
+        admin: adminUser ? {
+          email: adminUser.email,
+          name: adminUser.name,
+          role: adminUser.role
+        } : null
+      })
     }
 
     console.log('🚀 データベース初期化開始...')

@@ -1,0 +1,395 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BONICA システム テストレポート</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fb;
+        }
+        .metric {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .metric-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .metric-label {
+            font-size: 0.9em;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .success { color: #10b981; }
+        .failure { color: #ef4444; }
+        .warning { color: #f59e0b; }
+        .content {
+            padding: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .section h2 {
+            color: #374151;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 10px;
+        }
+        .test-runs {
+            display: grid;
+            gap: 15px;
+        }
+        .test-run {
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 20px;
+            transition: box-shadow 0.2s;
+        }
+        .test-run:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .test-run.success {
+            border-left: 4px solid #10b981;
+        }
+        .test-run.failure {
+            border-left: 4px solid #ef4444;
+        }
+        .test-run-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .status-failure {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .test-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .detail-item {
+            padding: 10px;
+            background: #f9fafb;
+            border-radius: 4px;
+        }
+        .detail-label {
+            font-size: 0.8em;
+            color: #6b7280;
+            margin-bottom: 5px;
+        }
+        .detail-value {
+            font-weight: 600;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .footer {
+            background: #374151;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 0.9em;
+        }
+        @media (max-width: 768px) {
+            .summary {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .test-run-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌾 BONICA システム</h1>
+            <p>農産物仕入れ・納品・請求管理システム テストレポート</p>
+            <p>生成日時: 2025/9/7 11:53:14</p>
+        </div>
+
+        <div class="summary">
+            <div class="metric">
+                <div class="metric-value success">4</div>
+                <div class="metric-label">総実行回数</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value success">
+                    4
+                </div>
+                <div class="metric-label">成功回数</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value success">
+                    40
+                </div>
+                <div class="metric-label">成功テスト数</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value success">
+                    0
+                </div>
+                <div class="metric-label">失敗テスト数</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value warning">
+                    0.4s
+                </div>
+                <div class="metric-label">平均実行時間</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value success">
+                    100.0%
+                </div>
+                <div class="metric-label">平均成功率</div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="section">
+                <h2>📊 実行結果詳細</h2>
+                <div class="test-runs">
+                    
+                        <div class="test-run success">
+                            <div class="test-run-header">
+                                <div>
+                                    <strong>実行 #4</strong>
+                                    <span style="margin-left: 15px; color: #6b7280;">
+                                        2025/9/7 11:50:09
+                                    </span>
+                                </div>
+                                <span class="status-badge status-success">
+                                    成功
+                                </span>
+                            </div>
+                            <div class="test-details">
+                                <div class="detail-item">
+                                    <div class="detail-label">総実行時間</div>
+                                    <div class="detail-value">0.55秒</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">成功テスト</div>
+                                    <div class="detail-value success">10</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">失敗テスト</div>
+                                    <div class="detail-value failure">0</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">成功率</div>
+                                    <div class="detail-value">100.0%</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">データ生成</div>
+                                    <div class="detail-value">345ms</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">テスト実行</div>
+                                    <div class="detail-value">200ms</div>
+                                </div>
+                            </div>
+                        </div>
+                    
+                        <div class="test-run success">
+                            <div class="test-run-header">
+                                <div>
+                                    <strong>実行 #3</strong>
+                                    <span style="margin-left: 15px; color: #6b7280;">
+                                        2025/9/7 11:51:58
+                                    </span>
+                                </div>
+                                <span class="status-badge status-success">
+                                    成功
+                                </span>
+                            </div>
+                            <div class="test-details">
+                                <div class="detail-item">
+                                    <div class="detail-label">総実行時間</div>
+                                    <div class="detail-value">0.47秒</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">成功テスト</div>
+                                    <div class="detail-value success">10</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">失敗テスト</div>
+                                    <div class="detail-value failure">0</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">成功率</div>
+                                    <div class="detail-value">100.0%</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">データ生成</div>
+                                    <div class="detail-value">320ms</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">テスト実行</div>
+                                    <div class="detail-value">155ms</div>
+                                </div>
+                            </div>
+                        </div>
+                    
+                        <div class="test-run success">
+                            <div class="test-run-header">
+                                <div>
+                                    <strong>実行 #2</strong>
+                                    <span style="margin-left: 15px; color: #6b7280;">
+                                        2025/9/7 11:52:01
+                                    </span>
+                                </div>
+                                <span class="status-badge status-success">
+                                    成功
+                                </span>
+                            </div>
+                            <div class="test-details">
+                                <div class="detail-item">
+                                    <div class="detail-label">総実行時間</div>
+                                    <div class="detail-value">0.24秒</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">成功テスト</div>
+                                    <div class="detail-value success">10</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">失敗テスト</div>
+                                    <div class="detail-value failure">0</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">成功率</div>
+                                    <div class="detail-value">100.0%</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">データ生成</div>
+                                    <div class="detail-value">174ms</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">テスト実行</div>
+                                    <div class="detail-value">68ms</div>
+                                </div>
+                            </div>
+                        </div>
+                    
+                        <div class="test-run success">
+                            <div class="test-run-header">
+                                <div>
+                                    <strong>実行 #1</strong>
+                                    <span style="margin-left: 15px; color: #6b7280;">
+                                        2025/9/7 11:52:04
+                                    </span>
+                                </div>
+                                <span class="status-badge status-success">
+                                    成功
+                                </span>
+                            </div>
+                            <div class="test-details">
+                                <div class="detail-item">
+                                    <div class="detail-label">総実行時間</div>
+                                    <div class="detail-value">0.28秒</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">成功テスト</div>
+                                    <div class="detail-value success">10</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">失敗テスト</div>
+                                    <div class="detail-value failure">0</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">成功率</div>
+                                    <div class="detail-value">100.0%</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">データ生成</div>
+                                    <div class="detail-value">228ms</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">テスト実行</div>
+                                    <div class="detail-value">47ms</div>
+                                </div>
+                            </div>
+                        </div>
+                    
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🖥️ 実行環境情報</h2>
+                <div class="detail-item">
+                    <div class="detail-label">Node.js バージョン</div>
+                    <div class="detail-value">v22.17.0</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">プラットフォーム</div>
+                    <div class="detail-value">linux x64</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>🌾 BONICA 農産物管理システム | Powered by Next.js + Prisma + SQLite</p>
+            <p>このレポートは自動生成されました</p>
+        </div>
+    </div>
+</body>
+</html>

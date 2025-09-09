@@ -1,0 +1,12 @@
+{
+  "totalRuns": 4,
+  "successfulRuns": 4,
+  "averageSuccessRate": 100,
+  "averageDuration": 385,
+  "lastRun": "2025-09-07T11:52:04.847Z",
+  "trends": {
+    "improvingSuccessRate": false,
+    "averageTestsPassed": 10,
+    "averageTestsFailed": 0
+  }
+}

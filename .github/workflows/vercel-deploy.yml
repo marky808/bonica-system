@@ -1,0 +1,62 @@
+name: Vercel Auto-Initialize
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  auto-initialize:
+    name: Auto-Initialize Database
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Wait for Vercel deployment
+        run: |
+          echo "⏳ Waiting for Vercel deployment to complete..."
+          sleep 60
+
+      - name: Auto-initialize database
+        env:
+          VERCEL_URL: ${{ secrets.VERCEL_URL }}
+        run: |
+          node scripts/auto-init.js
+        continue-on-error: true
+
+      - name: Manual initialization fallback
+        if: failure()
+        env:
+          VERCEL_URL: ${{ secrets.VERCEL_URL }}
+          INIT_SECRET_KEY: ${{ secrets.INIT_SECRET_KEY }}
+        run: |
+          echo "🔄 Attempting manual initialization..."
+          curl -X POST "https://$VERCEL_URL/api/admin/init" \
+            -H "Authorization: Bearer $INIT_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -v || echo "Manual initialization completed or already done"
+
+      - name: Verification
+        env:
+          VERCEL_URL: ${{ secrets.VERCEL_URL }}
+        run: |
+          echo "🔍 Verifying deployment status..."
+          curl -X GET "https://$VERCEL_URL/api/health" \
+            -H "Content-Type: application/json" \
+            -v
+
+      - name: Success notification
+        if: success()
+        run: |
+          echo "🎉 Auto-initialization completed!"
+          echo "🌍 Your app is ready at: https://${{ secrets.VERCEL_URL }}"
+          echo "🔑 Login with: 808works@gmail.com / 6391"

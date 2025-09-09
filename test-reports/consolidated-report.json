@@ -1,0 +1,172 @@
+{
+  "generatedAt": "2025-09-07T11:53:14.613Z",
+  "statistics": {
+    "totalRuns": 4,
+    "successfulRuns": 4,
+    "totalTests": 40,
+    "totalPassed": 40,
+    "totalFailed": 0,
+    "averageSuccessRate": 100,
+    "averageDuration": 385
+  },
+  "reports": [
+    {
+      "timestamp": "2025-09-07T11:50:09.897Z",
+      "environment": {
+        "nodeVersion": "v22.17.0",
+        "platform": "linux x64",
+        "memoryUsage": {
+          "rss": 205053952,
+          "heapTotal": 87588864,
+          "heapUsed": 65252424,
+          "external": 3296086,
+          "arrayBuffers": 169113
+        }
+      },
+      "phases": {
+        "dataGeneration": {
+          "status": "SUCCESS",
+          "duration": 345
+        },
+        "testing": {
+          "status": "SUCCESS",
+          "duration": 200,
+          "results": {
+            "total": 10,
+            "passed": 10,
+            "failed": 0,
+            "skipped": 0,
+            "successRate": 100
+          }
+        }
+      },
+      "summary": {
+        "totalDuration": 547,
+        "success": true,
+        "testsPassed": 10,
+        "testsFailed": 0,
+        "successRate": 100
+      }
+    },
+    {
+      "timestamp": "2025-09-07T11:51:58.117Z",
+      "environment": {
+        "nodeVersion": "v22.17.0",
+        "platform": "linux x64",
+        "memoryUsage": {
+          "rss": 180985856,
+          "heapTotal": 89161728,
+          "heapUsed": 55544296,
+          "external": 3161472,
+          "arrayBuffers": 34483
+        }
+      },
+      "phases": {
+        "dataGeneration": {
+          "status": "SUCCESS",
+          "duration": 320
+        },
+        "testing": {
+          "status": "SUCCESS",
+          "duration": 155,
+          "results": {
+            "total": 10,
+            "passed": 10,
+            "failed": 0,
+            "skipped": 0,
+            "successRate": 100
+          }
+        }
+      },
+      "summary": {
+        "totalDuration": 475,
+        "success": true,
+        "testsPassed": 10,
+        "testsFailed": 0,
+        "successRate": 100
+      }
+    },
+    {
+      "timestamp": "2025-09-07T11:52:01.600Z",
+      "environment": {
+        "nodeVersion": "v22.17.0",
+        "platform": "linux x64",
+        "memoryUsage": {
+          "rss": 196763648,
+          "heapTotal": 91176960,
+          "heapUsed": 57324256,
+          "external": 3177226,
+          "arrayBuffers": 44475
+        }
+      },
+      "phases": {
+        "dataGeneration": {
+          "status": "SUCCESS",
+          "duration": 174
+        },
+        "testing": {
+          "status": "SUCCESS",
+          "duration": 68,
+          "results": {
+            "total": 10,
+            "passed": 10,
+            "failed": 0,
+            "skipped": 0,
+            "successRate": 100
+          }
+        }
+      },
+      "summary": {
+        "totalDuration": 242,
+        "success": true,
+        "testsPassed": 10,
+        "testsFailed": 0,
+        "successRate": 100
+      }
+    },
+    {
+      "timestamp": "2025-09-07T11:52:04.847Z",
+      "environment": {
+        "nodeVersion": "v22.17.0",
+        "platform": "linux x64",
+        "memoryUsage": {
+          "rss": 193200128,
+          "heapTotal": 91455488,
+          "heapUsed": 49470448,
+          "external": 3177226,
+          "arrayBuffers": 44475
+        }
+      },
+      "phases": {
+        "dataGeneration": {
+          "status": "SUCCESS",
+          "duration": 228
+        },
+        "testing": {
+          "status": "SUCCESS",
+          "duration": 47,
+          "results": {
+            "total": 10,
+            "passed": 10,
+            "failed": 0,
+            "skipped": 0,
+            "successRate": 100
+          }
+        }
+      },
+      "summary": {
+        "totalDuration": 276,
+        "success": true,
+        "testsPassed": 10,
+        "testsFailed": 0,
+        "successRate": 100
+      }
+    }
+  ],
+  "recommendations": [
+    {
+      "type": "info",
+      "message": "より多くのテストを実行して安定性を確認することをお勧めします。"
+    }
+  ]
+}
