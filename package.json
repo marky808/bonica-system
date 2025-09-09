@@ -4,7 +4,7 @@
   "private": true,
   "description": "BONICA管理システム - 農産物仕入れ・納品・請求管理システム",
   "scripts": {
-    "build": "next build",
+    "build": "prisma generate && next build",
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
@@ -16,7 +16,10 @@
     "seed:test": "tsx scripts/seed-test-data.ts",
     "test:workflow": "tsx scripts/test-workflow.ts",
     "test:integration": "tsx scripts/integration-tests.ts",
-    "test:report": "tsx scripts/generate-report.ts"
+    "test:report": "tsx scripts/generate-report.ts",
+    "vercel-build": "npm run postinstall && next build",
+    "postinstall": "prisma generate",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "latest",
