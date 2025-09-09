@@ -2,9 +2,10 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { useAuth } from "@/lib/auth-context"
 import {
   Leaf,
   LayoutDashboard,
@@ -17,15 +18,24 @@ import {
   Menu,
   X,
   BarChart3,
+  LogOut,
+  List,
 } from "lucide-react"
 
 const navigation = [
   { name: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
   { name: "仕入れ管理", href: "/purchases", icon: ShoppingCart },
+  { name: "在庫管理", href: "/inventory", icon: Package },
   { name: "納品管理", href: "/deliveries", icon: Truck },
   { name: "帳票管理", href: "/invoices", icon: FileText },
+  { name: "一覧表示", href: "/lists", icon: List, hasSubNav: true },
   { name: "レポート", href: "/reports", icon: BarChart3 },
-  { name: "マスタ管理", href: "/masters", icon: Settings },
+  { name: "マスタ管理", href: "/masters", icon: Settings, hasSubNav: true },
+]
+
+const listSubNav = [
+  { name: "仕入れ一覧", href: "/lists/purchases", icon: ShoppingCart },
+  { name: "納品一覧", href: "/lists/deliveries", icon: Truck },
 ]
 
 const masterSubNav = [
@@ -36,9 +46,21 @@ const masterSubNav = [
 
 export function Sidebar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [expandedMenu, setExpandedMenu] = useState<string | null>(null)
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, logout } = useAuth()
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/")
+  
+  const toggleMenu = (href: string) => {
+    setExpandedMenu(expandedMenu === href ? null : href)
+  }
+
+  const handleLogout = () => {
+    logout()
+    router.push('/login')
+  }
 
   return (
     <>
@@ -81,22 +103,70 @@ export function Sidebar() {
 
               return (
                 <div key={item.name}>
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                      active
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    )}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    <Icon className="h-5 w-5" />
-                    {item.name}
-                  </Link>
+                  {item.hasSubNav ? (
+                    <button
+                      onClick={() => toggleMenu(item.href)}
+                      className={cn(
+                        "flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full",
+                        active
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className="h-5 w-5" />
+                        {item.name}
+                      </div>
+                      <div className={cn(
+                        "transition-transform duration-200",
+                        expandedMenu === item.href ? "rotate-90" : "rotate-0"
+                      )}>
+                        ▶
+                      </div>
+                    </button>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                        active
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      )}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <Icon className="h-5 w-5" />
+                      {item.name}
+                    </Link>
+                  )}
+
+                  {/* List sub-navigation */}
+                  {item.href === "/lists" && expandedMenu === "/lists" && (
+                    <div className="ml-8 mt-2 space-y-1">
+                      {listSubNav.map((subItem) => {
+                        const SubIcon = subItem.icon
+                        return (
+                          <Link
+                            key={subItem.name}
+                            href={subItem.href}
+                            className={cn(
+                              "flex items-center gap-2 px-3 py-1 rounded text-sm transition-colors",
+                              pathname === subItem.href
+                                ? "text-primary font-medium"
+                                : "text-muted-foreground hover:text-sidebar-foreground",
+                            )}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                          >
+                            <SubIcon className="h-4 w-4" />
+                            {subItem.name}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
 
                   {/* Master sub-navigation */}
-                  {item.href === "/masters" && isActive("/masters") && (
+                  {item.href === "/masters" && expandedMenu === "/masters" && (
                     <div className="ml-8 mt-2 space-y-1">
                       {masterSubNav.map((subItem) => {
                         const SubIcon = subItem.icon
@@ -128,13 +198,28 @@ export function Sidebar() {
           <div className="p-4 border-t border-sidebar-border">
             <div className="flex items-center gap-3 p-3 rounded-lg bg-sidebar-accent">
               <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                <span className="text-sm font-medium text-primary-foreground">田</span>
+                <span className="text-sm font-medium text-primary-foreground">
+                  {user?.name?.[0] || 'U'}
+                </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-sidebar-accent-foreground">田中太郎</p>
-                <p className="text-xs text-muted-foreground truncate">admin@example.com</p>
+                <p className="text-sm font-medium text-sidebar-accent-foreground">
+                  {user?.name || 'ユーザー'}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {user?.email || ''}
+                </p>
               </div>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="w-full mt-2 justify-start text-muted-foreground hover:text-sidebar-foreground"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              ログアウト
+            </Button>
           </div>
         </div>
       </div>

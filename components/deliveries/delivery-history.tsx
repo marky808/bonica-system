@@ -263,8 +263,8 @@ export function DeliveryHistory({ onReissueSlip }: DeliveryHistoryProps) {
                     <div className="flex flex-col gap-1">
                       {getStatusBadge(delivery.status)}
                       {delivery.freeeDeliverySlipId && (
-                        <Badge variant="outline" className="text-xs">
-                          freee連携済み
+                        <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-300">
+                          freee履歴
                         </Badge>
                       )}
                     </div>
@@ -427,8 +427,8 @@ export function DeliveryHistory({ onReissueSlip }: DeliveryHistoryProps) {
                       <div className="space-y-1">
                         {getStatusBadge(delivery.status)}
                         {delivery.freeeDeliverySlipId && (
-                          <Badge variant="outline" className="text-xs">
-                            freee連携済み
+                          <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-300">
+                            freee履歴
                           </Badge>
                         )}
                       </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -12,40 +12,26 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Plus, X } from "lucide-react"
-import type { Purchase } from "@/types"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Plus, X, Loader2 } from "lucide-react"
+import { apiClient, type Category, type Supplier, type Purchase } from "@/lib/api"
 
 const purchaseSchema = z.object({
   productName: z.string().min(1, "商品名を入力してください"),
   categoryId: z.string().min(1, "カテゴリーを選択してください"),
   quantity: z.number().min(0.01, "数量を入力してください"),
   unit: z.string().min(1, "単位を入力してください"),
-  unitNotes: z.string().optional(),
-  price: z.number().min(0, "仕入れ価格を入力してください"),
-  taxType: z.enum(["included", "excluded"]),
+  unitNote: z.string().optional(),
+  unitPrice: z.number().min(0, "単価を入力してください"),
+  price: z.number().min(0, "総額は自動計算されます"),
+  taxType: z.enum(["TAXABLE", "TAX_FREE"]),
   supplierId: z.string().min(1, "仕入れ先を選択してください"),
-  date: z.string().min(1, "仕入れ日を選択してください"),
+  purchaseDate: z.string().min(1, "仕入れ日を選択してください"),
   expiryDate: z.string().optional(),
-  deliveryNotes: z.string().optional(),
+  deliveryFee: z.string().optional(),
 })
 
 type PurchaseFormData = z.infer<typeof purchaseSchema>
-
-// Mock data
-const categories = [
-  { id: "1", name: "いちご" },
-  { id: "2", name: "すいか" },
-  { id: "3", name: "メロン" },
-  { id: "4", name: "トマト" },
-  { id: "5", name: "きゅうり" },
-]
-
-const suppliers = [
-  { id: "1", name: "田中農園" },
-  { id: "2", name: "山田農場" },
-  { id: "3", name: "ABC農園" },
-  { id: "4", name: "鈴木ファーム" },
-]
 
 const productSuggestions = [
   "いちご（あまおう）",
@@ -69,6 +55,42 @@ interface PurchaseFormProps {
 export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormProps) {
   const [productSuggestionsVisible, setProductSuggestionsVisible] = useState(false)
   const [unitSuggestionsVisible, setUnitSuggestionsVisible] = useState(false)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true)
+      setError('')
+      
+      try {
+        const [categoriesRes, suppliersRes] = await Promise.all([
+          apiClient.getCategories(),
+          apiClient.getSuppliers()
+        ])
+        
+        if (categoriesRes.data) {
+          setCategories(categoriesRes.data)
+        } else {
+          setError('カテゴリーの読み込みに失敗しました')
+        }
+        
+        if (suppliersRes.data) {
+          setSuppliers(suppliersRes.data)
+        } else {
+          setError('仕入れ先の読み込みに失敗しました')
+        }
+      } catch (err) {
+        setError('データの読み込みに失敗しました')
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    loadData()
+  }, [])
 
   const form = useForm<PurchaseFormData>({
     resolver: zodResolver(purchaseSchema),
@@ -77,18 +99,25 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
       categoryId: initialData?.categoryId || "",
       quantity: initialData?.quantity || undefined,
       unit: initialData?.unit || "",
-      unitNotes: initialData?.unitNotes || "",
+      unitNote: initialData?.unitNote || "",
+      unitPrice: initialData?.unitPrice || initialData?.price / (initialData?.quantity || 1) || undefined,
       price: initialData?.price || undefined,
-      taxType: initialData?.taxType || "excluded",
-      supplierId: initialData?.supplierId || "",
-      date: initialData?.date || new Date().toISOString().split("T")[0],
-      expiryDate: initialData?.expiryDate || "",
-      deliveryNotes: initialData?.deliveryNotes || "",
+      taxType: (initialData?.taxType as "TAXABLE" | "TAX_FREE") || "TAXABLE",
+      supplierId: initialData?.supplier?.id || "",
+      purchaseDate: initialData?.purchaseDate 
+        ? new Date(initialData.purchaseDate).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0],
+      expiryDate: initialData?.expiryDate 
+        ? new Date(initialData.expiryDate).toISOString().split("T")[0]
+        : "",
+      deliveryFee: initialData?.deliveryFee || "",
     },
   })
 
   const handleSubmit = (data: PurchaseFormData) => {
-    onSubmit(data)
+    // Calculate total price from unit price and quantity
+    const calculatedPrice = (data.unitPrice || 0) * (data.quantity || 0)
+    onSubmit({ ...data, price: calculatedPrice })
   }
 
   const handleClear = () => {
@@ -97,14 +126,37 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
       categoryId: "",
       quantity: undefined,
       unit: "",
-      unitNotes: "",
+      unitNote: "",
+      unitPrice: undefined,
       price: undefined,
-      taxType: "excluded",
+      taxType: "TAXABLE",
       supplierId: "",
-      date: new Date().toISOString().split("T")[0],
+      purchaseDate: new Date().toISOString().split("T")[0],
       expiryDate: "",
-      deliveryNotes: "",
+      deliveryFee: "",
     })
+  }
+
+  // Watch for changes in quantity and unit price to auto-calculate total price
+  const watchQuantity = form.watch("quantity")
+  const watchUnitPrice = form.watch("unitPrice")
+
+  // Auto-calculate total price
+  useEffect(() => {
+    const quantity = watchQuantity || 0
+    const unitPrice = watchUnitPrice || 0
+    const calculatedPrice = quantity * unitPrice
+    form.setValue("price", calculatedPrice)
+  }, [watchQuantity, watchUnitPrice, form])
+
+  if (loading) {
+    return (
+      <Card className="max-w-4xl mx-auto">
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -116,6 +168,11 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
         <CardDescription className="text-pretty">農産物の仕入れ情報を入力してください</CardDescription>
       </CardHeader>
       <CardContent>
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -256,7 +313,7 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
               {/* 単位備考 */}
               <FormField
                 control={form.control}
-                name="unitNotes"
+                name="unitNote"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>単位備考</FormLabel>
@@ -269,18 +326,18 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
                 )}
               />
 
-              {/* 仕入れ価格 */}
+              {/* 単価 */}
               <FormField
                 control={form.control}
-                name="price"
+                name="unitPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>仕入れ価格 *</FormLabel>
+                    <FormLabel>単価 *</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
-                        step="1"
-                        placeholder="0"
+                        step="0.01"
+                        placeholder="200"
                         value={field.value || ""}
                         onChange={(e) =>
                           field.onChange(e.target.value === "" ? undefined : Number.parseFloat(e.target.value))
@@ -288,6 +345,29 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
                         className="h-12"
                       />
                     </FormControl>
+                    <FormDescription>円/{form.watch("unit") || "単位"}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {/* 総額（自動計算） */}
+              <FormField
+                control={form.control}
+                name="price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>総額（自動計算）</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="1"
+                        value={field.value || ""}
+                        readOnly
+                        className="h-12 bg-gray-50 text-gray-700"
+                        placeholder="0"
+                      />
+                    </FormControl>
+                    <FormDescription>数量 × 単価で自動計算されます</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -309,7 +389,7 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
                       <SelectContent>
                         {suppliers.map((supplier) => (
                           <SelectItem key={supplier.id} value={supplier.id}>
-                            {supplier.name}
+                            {supplier.companyName}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -322,7 +402,7 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
               {/* 仕入れ日 */}
               <FormField
                 control={form.control}
-                name="date"
+                name="purchaseDate"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>仕入れ日 *</FormLabel>
@@ -365,12 +445,12 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
                       className="flex flex-row space-x-6"
                     >
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="excluded" id="excluded" />
-                        <Label htmlFor="excluded">税別</Label>
+                        <RadioGroupItem value="TAXABLE" id="taxable" />
+                        <Label htmlFor="taxable">課税</Label>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="included" id="included" />
-                        <Label htmlFor="included">税込</Label>
+                        <RadioGroupItem value="TAX_FREE" id="tax_free" />
+                        <Label htmlFor="tax_free">非課税</Label>
                       </div>
                     </RadioGroup>
                   </FormControl>
@@ -382,7 +462,7 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
             {/* 配送料備考 */}
             <FormField
               control={form.control}
-              name="deliveryNotes"
+              name="deliveryFee"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>配送料備考</FormLabel>

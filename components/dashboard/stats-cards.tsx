@@ -8,7 +8,17 @@ interface StatsCardsProps {
 }
 
 export function StatsCards({ stats }: StatsCardsProps) {
+  console.log('🎯 StatsCards received stats:', stats)
+  
   const formatCurrency = (amount: number) => {
+    console.log('🔢 formatCurrency input:', amount, typeof amount, 'isNaN:', isNaN(amount))
+    if (isNaN(amount) || amount === null || amount === undefined) {
+      console.warn('⚠️ Invalid amount for formatting:', amount)
+      return new Intl.NumberFormat("ja-JP", {
+        style: "currency",
+        currency: "JPY",
+      }).format(0)
+    }
     return new Intl.NumberFormat("ja-JP", {
       style: "currency",
       currency: "JPY",
@@ -17,6 +27,10 @@ export function StatsCards({ stats }: StatsCardsProps) {
 
   const profit = stats.monthlyDeliveryAmount - stats.monthlyPurchaseAmount
   const profitMargin = stats.monthlyDeliveryAmount > 0 ? ((profit / stats.monthlyDeliveryAmount) * 100).toFixed(1) : "0"
+  
+  console.log('🧮 Calculated values:')
+  console.log('- profit:', profit)
+  console.log('- profitMargin:', profitMargin)
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

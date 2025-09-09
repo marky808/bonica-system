@@ -1,89 +1,30 @@
 "use client"
 
-import { useState } from "react"
-import { useForm } from "react-hook-form"
+import { useState, useEffect } from "react"
+import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Truck, FileText } from "lucide-react"
-import type { Purchase, Delivery } from "@/types"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Plus, X, Loader2, Search, Package, ShoppingCart } from "lucide-react"
+import { apiClient, type Customer, type Purchase, type Delivery } from "@/lib/api"
 
 const deliverySchema = z.object({
-  customerId: z.string().min(1, "納品先を選択してください"),
-  date: z.string().min(1, "納品日を選択してください"),
-  items: z
-    .array(
-      z.object({
-        purchaseId: z.string(),
-        quantity: z.number().min(0.01, "使用数量を入力してください"),
-        price: z.number().min(0, "納品価格を入力してください"),
-      }),
-    )
-    .min(1, "商品を選択してください"),
+  customerId: z.string().min(1, "お客様を選択してください"),
+  deliveryDate: z.string().min(1, "納品日を選択してください"),
+  items: z.array(z.object({
+    purchaseId: z.string().min(1, "商品を選択してください"),
+    quantity: z.number().min(0.01, "数量を入力してください"),
+    unitPrice: z.number().min(0, "単価を入力してください"),
+  })).min(1, "納品商品を1つ以上選択してください"),
 })
 
 type DeliveryFormData = z.infer<typeof deliverySchema>
-
-// Mock data
-const availablePurchases: Purchase[] = [
-  {
-    id: "1",
-    date: "2024-01-15",
-    productName: "いちご（あまおう）",
-    categoryId: "1",
-    quantity: 50,
-    unit: "パック",
-    unitNotes: "1パック300g",
-    price: 125000,
-    taxType: "excluded",
-    supplierId: "1",
-    status: "partial",
-    remainingQuantity: 20,
-    createdAt: "2024-01-15T09:00:00Z",
-  },
-  {
-    id: "2",
-    date: "2024-01-14",
-    productName: "トマト（大玉）",
-    categoryId: "4",
-    quantity: 100,
-    unit: "kg",
-    price: 80000,
-    taxType: "excluded",
-    supplierId: "2",
-    status: "unused",
-    remainingQuantity: 100,
-    createdAt: "2024-01-14T14:30:00Z",
-  },
-  {
-    id: "3",
-    date: "2024-01-16",
-    productName: "メロン（アンデス）",
-    categoryId: "3",
-    quantity: 25,
-    unit: "個",
-    price: 200000,
-    taxType: "excluded",
-    supplierId: "3",
-    status: "unused",
-    remainingQuantity: 25,
-    createdAt: "2024-01-16T10:00:00Z",
-  },
-]
-
-const customers = [
-  { id: "1", name: "ABC市場" },
-  { id: "2", name: "XYZ青果店" },
-  { id: "3", name: "DEF農協" },
-  { id: "4", name: "GHI スーパー" },
-]
 
 interface DeliveryFormProps {
   onSubmit: (data: DeliveryFormData) => void
@@ -92,17 +33,110 @@ interface DeliveryFormProps {
 }
 
 export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormProps) {
-  const [selectedPurchases, setSelectedPurchases] = useState<Set<string>>(new Set())
-  const [deliveryItems, setDeliveryItems] = useState<Record<string, { quantity: number; price: number }>>({})
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [availablePurchases, setAvailablePurchases] = useState<Purchase[]>([])
+  const [allPurchases, setAllPurchases] = useState<Purchase[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  const [isComposing, setIsComposing] = useState(false)
 
   const form = useForm<DeliveryFormData>({
     resolver: zodResolver(deliverySchema),
     defaultValues: {
       customerId: initialData?.customerId || "",
-      date: initialData?.date || new Date().toISOString().split("T")[0],
-      items: [],
+      deliveryDate: initialData?.deliveryDate 
+        ? new Date(initialData.deliveryDate).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0],
+      items: initialData?.items?.map(item => ({
+        purchaseId: item.purchaseId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })) || [],
     },
   })
+
+  const { fields, append, remove, update } = useFieldArray({
+    control: form.control,
+    name: "items",
+  })
+
+  useEffect(() => {
+    if (isComposing) return
+
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery, isComposing])
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true)
+      setError('')
+      
+      try {
+        const [customersRes, purchasesRes] = await Promise.all([
+          apiClient.getCustomers(),
+          apiClient.getAvailablePurchases()
+        ])
+        
+        if (customersRes.data) {
+          setCustomers(customersRes.data)
+        } else {
+          setError('お客様データの読み込みに失敗しました')
+        }
+        
+        if (purchasesRes.data) {
+          setAllPurchases(purchasesRes.data)
+          setAvailablePurchases(purchasesRes.data)
+        } else {
+          setError('在庫データの読み込みに失敗しました')
+        }
+      } catch (err) {
+        setError('データの読み込みに失敗しました')
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    loadInitialData()
+  }, [])
+
+  useEffect(() => {
+    if (!debouncedSearchQuery) {
+      setAvailablePurchases(allPurchases)
+      return
+    }
+    
+    const filtered = allPurchases.filter(purchase => 
+      purchase.productName.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      purchase.category?.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      purchase.supplier?.companyName.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+    )
+    
+    setAvailablePurchases(filtered)
+  }, [debouncedSearchQuery, allPurchases])
+
+  const handleSubmit = (data: DeliveryFormData) => {
+    onSubmit(data)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && e.target !== e.currentTarget) {
+      e.preventDefault()
+    }
+  }
+
+  const handleClear = () => {
+    form.reset({
+      customerId: "",
+      deliveryDate: new Date().toISOString().split("T")[0],
+      items: [],
+    })
+  }
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("ja-JP", {
@@ -111,277 +145,408 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
     }).format(amount)
   }
 
-  const handlePurchaseSelect = (purchaseId: string, checked: boolean) => {
-    const newSelected = new Set(selectedPurchases)
-    if (checked) {
-      newSelected.add(purchaseId)
-      // Initialize with default values
-      setDeliveryItems((prev) => ({
-        ...prev,
-        [purchaseId]: { quantity: 1, price: 0 },
-      }))
-    } else {
-      newSelected.delete(purchaseId)
-      setDeliveryItems((prev) => {
-        const { [purchaseId]: removed, ...rest } = prev
-        return rest
-      })
-    }
-    setSelectedPurchases(newSelected)
-  }
-
-  const handleItemChange = (purchaseId: string, field: "quantity" | "price", value: number) => {
-    setDeliveryItems((prev) => ({
-      ...prev,
-      [purchaseId]: {
-        ...prev[purchaseId],
-        [field]: value,
-      },
-    }))
-  }
-
   const calculateTotalAmount = () => {
-    return Array.from(selectedPurchases).reduce((total, purchaseId) => {
-      const item = deliveryItems[purchaseId]
-      return total + (item?.quantity || 0) * (item?.price || 0)
+    return form.watch("items").reduce((sum, item) => {
+      return sum + (item.quantity || 0) * (item.unitPrice || 0)
     }, 0)
   }
 
-  const calculateTotalProfit = () => {
-    return Array.from(selectedPurchases).reduce((total, purchaseId) => {
-      const purchase = availablePurchases.find((p) => p.id === purchaseId)
-      const item = deliveryItems[purchaseId]
-      if (!purchase || !item) return total
-
-      const unitCost = purchase.price / purchase.quantity
-      const cost = item.quantity * unitCost
-      const revenue = item.quantity * item.price
-      return total + (revenue - cost)
-    }, 0)
+  const getPurchaseInfo = (purchaseId: string) => {
+    return allPurchases.find(p => p.id === purchaseId) || availablePurchases.find(p => p.id === purchaseId)
   }
 
-  const handleSubmit = (data: DeliveryFormData) => {
-    const items = Array.from(selectedPurchases).map((purchaseId) => {
-      const purchase = availablePurchases.find((p) => p.id === purchaseId)!
-      const deliveryItem = deliveryItems[purchaseId]
-      const unitCost = purchase.price / purchase.quantity
-      const cost = deliveryItem.quantity * unitCost
-      const revenue = deliveryItem.quantity * deliveryItem.price
-
-      return {
-        purchaseId,
-        productName: purchase.productName,
-        quantity: deliveryItem.quantity,
-        unit: purchase.unit,
-        price: deliveryItem.price,
-        profit: revenue - cost,
-      }
-    })
-
-    onSubmit({
-      ...data,
-      items,
-    })
+  const getMaxQuantity = (purchaseId: string) => {
+    const purchase = getPurchaseInfo(purchaseId)
+    return purchase ? purchase.remainingQuantity : 0
   }
 
-  const generateDeliverySlip = () => {
-    // TODO: Implement freee integration for delivery slip generation
-    console.log("Generating delivery slip...")
-    alert("納品書を生成しました（freee連携機能は後で実装予定）")
+  if (loading) {
+    return (
+      <Card className="max-w-4xl mx-auto">
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-balance">納品処理</CardTitle>
-          <CardDescription className="text-pretty">在庫から商品を選択して納品処理を行います</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* 納品先選択 */}
-                <FormField
-                  control={form.control}
-                  name="customerId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>納品先 *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="h-12">
-                            <SelectValue placeholder="納品先を選択" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {customers.map((customer) => (
-                            <SelectItem key={customer.id} value={customer.id}>
-                              {customer.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* 納品日 */}
-                <FormField
-                  control={form.control}
-                  name="date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>納品日 *</FormLabel>
+    <Card className="max-w-4xl mx-auto">
+      <CardHeader>
+        <CardTitle className="text-2xl font-bold text-balance flex items-center gap-2">
+          <ShoppingCart className="h-6 w-6" />
+          {initialData ? "納品情報編集" : "新規納品登録"}
+        </CardTitle>
+        <CardDescription className="text-pretty">
+          在庫から商品を選択して納品情報を入力してください
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} onKeyDown={handleKeyDown} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="customerId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>お客様 *</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <Input type="date" {...field} className="h-12" />
+                        <SelectTrigger className="h-12">
+                          <SelectValue placeholder="お客様を選択" />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+                      <SelectContent>
+                        {customers.map((customer) => (
+                          <SelectItem key={customer.id} value={customer.id}>
+                            {customer.companyName} ({customer.contactPerson})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-      {/* 在庫選択エリア */}
-      <Card>
-        <CardHeader>
-          <CardTitle>利用可能な在庫</CardTitle>
-          <CardDescription>納品に使用する商品を選択してください</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">選択</TableHead>
-                  <TableHead>仕入れ日</TableHead>
-                  <TableHead>商品名</TableHead>
-                  <TableHead>残数</TableHead>
-                  <TableHead>仕入れ価格</TableHead>
-                  <TableHead>使用数量</TableHead>
-                  <TableHead>納品価格（単価）</TableHead>
-                  <TableHead>小計</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {availablePurchases.map((purchase) => {
-                  const isSelected = selectedPurchases.has(purchase.id)
-                  const item = deliveryItems[purchase.id]
-                  const subtotal = item ? item.quantity * item.price : 0
-
-                  return (
-                    <TableRow key={purchase.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={(checked) => handlePurchaseSelect(purchase.id, checked as boolean)}
-                        />
-                      </TableCell>
-                      <TableCell>{purchase.date}</TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{purchase.productName}</div>
-                          {purchase.unitNotes && (
-                            <div className="text-xs text-muted-foreground">{purchase.unitNotes}</div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {purchase.remainingQuantity} {purchase.unit}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{formatCurrency(purchase.price)}</TableCell>
-                      <TableCell>
-                        {isSelected && (
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            max={purchase.remainingQuantity}
-                            value={item?.quantity || 1}
-                            onChange={(e) =>
-                              handleItemChange(purchase.id, "quantity", Number.parseFloat(e.target.value) || 0)
-                            }
-                            className="w-24"
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {isSelected && (
-                          <Input
-                            type="number"
-                            step="1"
-                            min="0"
-                            value={item?.price || 0}
-                            onChange={(e) =>
-                              handleItemChange(purchase.id, "price", Number.parseFloat(e.target.value) || 0)
-                            }
-                            className="w-32"
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell>{isSelected && formatCurrency(subtotal)}</TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 合計金額表示 */}
-      {selectedPurchases.size > 0 && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-primary">{formatCurrency(calculateTotalAmount())}</div>
-                <div className="text-sm text-muted-foreground">合計納品金額</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-accent">{formatCurrency(calculateTotalProfit())}</div>
-                <div className="text-sm text-muted-foreground">予想利益</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-secondary">{selectedPurchases.size}品目</div>
-                <div className="text-sm text-muted-foreground">選択商品数</div>
-              </div>
+              <FormField
+                control={form.control}
+                name="deliveryDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>納品日 *</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="date" 
+                        {...field} 
+                        className="h-12"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                          }
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* アクションボタン */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <Button
-          onClick={form.handleSubmit(handleSubmit)}
-          className="flex-1 h-12"
-          disabled={selectedPurchases.size === 0}
-        >
-          <Truck className="h-4 w-4 mr-2" />
-          納品処理実行
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={generateDeliverySlip}
-          className="flex-1 h-12 bg-transparent"
-          disabled={selectedPurchases.size === 0}
-        >
-          <FileText className="h-4 w-4 mr-2" />
-          納品書発行
-        </Button>
-        <Button type="button" variant="secondary" onClick={onCancel} className="flex-1 h-12">
-          キャンセル
-        </Button>
-      </div>
-    </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Search className="h-5 w-5" />
+                  在庫検索
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <Input
+                      placeholder="商品名・カテゴリーで検索..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onCompositionStart={() => setIsComposing(true)}
+                      onCompositionEnd={() => setIsComposing(false)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                        }
+                      }}
+                      className="h-12"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setSearchQuery('')}
+                      className="h-12"
+                    >
+                      クリア
+                    </Button>
+                  </div>
+                </div>
+
+                {availablePurchases.length > 0 ? (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-medium mb-3">利用可能な在庫 ({availablePurchases.length}件)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
+                      {availablePurchases.map((purchase) => {
+                        const currentItems = form.watch('items')
+                        const isSelected = currentItems.some(item => item.purchaseId === purchase.id)
+                        
+                        return (
+                          <div
+                            key={purchase.id}
+                            className={`p-3 border rounded-lg cursor-pointer text-sm transition-colors ${
+                              isSelected 
+                                ? 'bg-blue-50 border-blue-300 hover:bg-blue-100' 
+                                : 'hover:bg-gray-50 border-gray-200'
+                            }`}
+                            onClick={() => {
+                              if (isSelected) return
+                              
+                              const currentItems = form.getValues('items')
+                              const emptySlotIndex = currentItems.findIndex(item => !item.purchaseId)
+                              
+                              const newItemData = {
+                                purchaseId: purchase.id,
+                                quantity: 0,
+                                unitPrice: purchase.unitPrice || (purchase.price / purchase.quantity)
+                              }
+                              
+                              if (emptySlotIndex !== -1) {
+                                const updatedItem = {
+                                  ...currentItems[emptySlotIndex],
+                                  purchaseId: purchase.id,
+                                  unitPrice: purchase.unitPrice || (purchase.price / purchase.quantity)
+                                }
+                                update(emptySlotIndex, updatedItem)
+                              } else {
+                                append(newItemData)
+                              }
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium text-gray-900">{purchase.productName}</div>
+                              {isSelected && (
+                                <div className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                  選択済み
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              カテゴリー: {purchase.category?.name}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              在庫: {purchase.remainingQuantity} {purchase.unit}
+                            </div>
+                            <div className="text-xs text-green-600 font-medium">
+                              単価: {formatCurrency(purchase.unitPrice || (purchase.price / purchase.quantity))}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              仕入れ先: {purchase.supplier?.companyName}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-6 text-center py-8">
+                    <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">
+                      {searchQuery ? 
+                        `「${searchQuery}」に該当する商品が見つかりませんでした` : 
+                        '利用可能な在庫がありません'
+                      }
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  納品商品
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {fields.map((field, index) => (
+                  <div key={field.id} className="p-4 border rounded-lg space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium">商品 {index + 1}</h4>
+                      {fields.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => remove(index)}
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.purchaseId`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>商品 *</FormLabel>
+                            <Select 
+                              onValueChange={(value) => {
+                                field.onChange(value)
+                                const purchase = getPurchaseInfo(value)
+                                if (purchase) {
+                                  form.setValue(`items.${index}.unitPrice`, purchase.unitPrice || (purchase.price / purchase.quantity))
+                                }
+                              }} 
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="h-12">
+                                  <SelectValue placeholder="商品を選択" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="max-h-60">
+                                {availablePurchases.map((purchase) => (
+                                  <SelectItem key={purchase.id} value={purchase.id}>
+                                    <div className="flex flex-col text-left">
+                                      <span className="font-medium">{purchase.productName}</span>
+                                      <span className="text-sm text-muted-foreground">
+                                        在庫: {purchase.remainingQuantity} {purchase.unit}
+                                      </span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.quantity`}
+                        render={({ field }) => {
+                          const purchaseId = form.watch(`items.${index}.purchaseId`)
+                          const maxQuantity = getMaxQuantity(purchaseId)
+                          const purchase = getPurchaseInfo(purchaseId)
+                          
+                          return (
+                            <FormItem>
+                              <FormLabel>
+                                数量 * {purchase && `(最大: ${maxQuantity} ${purchase.unit})`}
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  max={maxQuantity}
+                                  placeholder="数量を入力"
+                                  value={field.value > 0 ? field.value : ""}
+                                  onChange={(e) => {
+                                    const value = e.target.value
+                                    if (value === "") {
+                                      field.onChange(0)
+                                    } else {
+                                      const numValue = Number.parseFloat(value)
+                                      if (!isNaN(numValue)) {
+                                        field.onChange(numValue)
+                                      }
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                    }
+                                  }}
+                                  className="h-12"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )
+                        }}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.unitPrice`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>単価 *</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="1"
+                                placeholder="単価を入力"
+                                value={field.value > 0 ? field.value : ""}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  if (value === "") {
+                                    field.onChange(0)
+                                  } else {
+                                    const numValue = Number.parseFloat(value)
+                                    if (!isNaN(numValue)) {
+                                      field.onChange(numValue)
+                                    }
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                  }
+                                }}
+                                className="h-12"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {form.watch(`items.${index}.purchaseId`) && form.watch(`items.${index}.quantity`) && (
+                      <div className="text-right">
+                        <span className="text-lg font-bold text-primary">
+                          小計: {formatCurrency(form.watch(`items.${index}.quantity`) * form.watch(`items.${index}.unitPrice`))}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                <div className="flex justify-between items-center pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => append({ purchaseId: "", quantity: 0, unitPrice: 0 })}
+                    className="h-12"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    商品を追加
+                  </Button>
+                  
+                  <div className="text-right">
+                    <span className="text-xl font-bold text-primary">
+                      合計: {formatCurrency(calculateTotalAmount())}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex flex-col sm:flex-row gap-4 pt-6">
+              <Button type="submit" className="flex-1 h-12">
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                {initialData ? "更新" : "登録"}
+              </Button>
+              <Button type="button" variant="outline" onClick={handleClear} className="flex-1 h-12 bg-transparent">
+                <X className="h-4 w-4 mr-2" />
+                クリア
+              </Button>
+              <Button type="button" variant="secondary" onClick={onCancel} className="flex-1 h-12">
+                キャンセル
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
   )
 }

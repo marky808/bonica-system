@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,7 +10,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Download, TrendingUp } from "lucide-react"
+import { Download, TrendingUp, Loader2 } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
+import { apiClient } from "@/lib/api"
 import {
   LineChart,
   Line,
@@ -55,9 +58,130 @@ const supplierData = [
 ]
 
 export default function ReportsPage() {
-  const [selectedPeriod, setSelectedPeriod] = useState("2024")
-  const [startDate, setStartDate] = useState("2024-01-01")
-  const [endDate, setEndDate] = useState("2024-09-30")
+  const { isAuthenticated, isLoading } = useAuth()
+  const router = useRouter()
+  
+  const currentYear = new Date().getFullYear()
+  const currentMonth = new Date().getMonth() + 1
+  
+  const [selectedPeriod, setSelectedPeriod] = useState(currentYear.toString())
+  const [startDate, setStartDate] = useState(`${currentYear}-01-01`)
+  const [endDate, setEndDate] = useState(`${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`)
+  const [activeTab, setActiveTab] = useState("monthly")
+  
+  const [monthlyData, setMonthlyData] = useState<any[]>([])
+  const [categoryData, setCategoryData] = useState<any[]>([])
+  const [supplierData, setSupplierData] = useState<any[]>([])
+  const [profitData, setProfitData] = useState<any>(null)
+  const [summary, setSummary] = useState<any>(null)
+  const [purchasesData, setPurchasesData] = useState<any[]>([])
+  const [deliveriesData, setDeliveriesData] = useState<any[]>([])
+  const [inventoryData, setInventoryData] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string>('')
+  const [downloading, setDownloading] = useState(false)
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isAuthenticated, isLoading, router])
+
+  const loadReportData = async () => {
+    if (!isAuthenticated) return
+    
+    try {
+      setLoading(true)
+      setError('')
+      
+      console.log(`📊 レポートデータ読み込み: ${activeTab}, ${startDate} ～ ${endDate}`)
+      
+      const response = await apiClient.getReports({
+        startDate,
+        endDate,
+        type: activeTab as 'monthly' | 'category' | 'supplier' | 'profit'
+      })
+      
+      console.log('📈 レポートレスポンス:', response)
+      
+      if (response.data) {
+        const actualData = response.data.data || response.data
+        console.log('📊 実レポートデータ:', actualData)
+        
+        switch (activeTab) {
+          case 'monthly':
+            setMonthlyData(actualData.monthlyData || [])
+            setSummary(actualData.summary)
+            break
+          case 'category':
+            setCategoryData(actualData.categoryData || [])
+            break
+          case 'supplier':
+            setSupplierData(actualData.supplierData || [])
+            break
+          case 'profit':
+            setProfitData(actualData)
+            break
+          case 'purchases':
+            setPurchasesData(actualData.purchases || [])
+            break
+          case 'deliveries':
+            setDeliveriesData(actualData.deliveries || [])
+            break
+          case 'inventory':
+            setInventoryData(actualData.inventory || [])
+            break
+        }
+      } else {
+        console.error('❌ レポートデータエラー:', response.error)
+        setError(response.error || 'レポートデータの取得に失敗しました')
+      }
+    } catch (err: any) {
+      console.error('レポートデータ読み込みエラー:', err)
+      setError('レポートデータの取得中にエラーが発生しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCsvDownload = async (type: 'monthly' | 'purchases' | 'deliveries' | 'inventory') => {
+    try {
+      setDownloading(true)
+      console.log(`📄 CSV ダウンロード開始: ${type}`)
+      
+      const blob = await apiClient.downloadCsv({
+        startDate,
+        endDate,
+        type
+      })
+      
+      // ファイル名を生成
+      const filename = type === 'inventory' 
+        ? `在庫一覧_${new Date().toISOString().split('T')[0]}.csv`
+        : `${type === 'monthly' ? '月次レポート' : type === 'purchases' ? '仕入一覧' : '納品一覧'}_${startDate}_${endDate}.csv`
+      
+      // ダウンロードを実行
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      console.log(`✅ CSV ダウンロード完了: ${filename}`)
+    } catch (err: any) {
+      console.error('CSV ダウンロードエラー:', err)
+      setError('CSV ダウンロードに失敗しました')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadReportData()
+  }, [isAuthenticated, activeTab, startDate, endDate])
 
   return (
     <MainLayout>
@@ -67,8 +191,16 @@ export default function ReportsPage() {
             <h1 className="text-2xl font-bold text-foreground">レポート</h1>
             <p className="text-muted-foreground">過去データの分析と傾向を確認できます</p>
           </div>
-          <Button className="flex items-center gap-2">
-            <Download className="h-4 w-4" />
+          <Button 
+            className="flex items-center gap-2" 
+            onClick={() => handleCsvDownload(activeTab === 'monthly' || activeTab === 'category' || activeTab === 'supplier' || activeTab === 'profit' ? 'monthly' : 'monthly')}
+            disabled={downloading}
+          >
+            {downloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
             CSV出力
           </Button>
         </div>
@@ -103,13 +235,22 @@ export default function ReportsPage() {
                 <Input id="end-date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
               </div>
               <div className="flex items-end">
-                <Button className="w-full">更新</Button>
+                <Button className="w-full" onClick={loadReportData} disabled={loading}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      更新中...
+                    </>
+                  ) : (
+                    '更新'
+                  )}
+                </Button>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="monthly" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="monthly">月次レポート</TabsTrigger>
             <TabsTrigger value="category">商品別分析</TabsTrigger>
@@ -126,9 +267,11 @@ export default function ReportsPage() {
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">¥27,500,000</div>
+                  <div className="text-2xl font-bold">
+                    {summary ? `¥${summary.totalPurchase.toLocaleString()}` : '¥0'}
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    前年同期比 <span className="text-green-600">+12.5%</span>
+                    期間内合計仕入額
                   </p>
                 </CardContent>
               </Card>
@@ -138,9 +281,11 @@ export default function ReportsPage() {
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">¥32,300,000</div>
+                  <div className="text-2xl font-bold">
+                    {summary ? `¥${summary.totalDelivery.toLocaleString()}` : '¥0'}
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    前年同期比 <span className="text-green-600">+8.3%</span>
+                    期間内合計売上額
                   </p>
                 </CardContent>
               </Card>
@@ -150,9 +295,13 @@ export default function ReportsPage() {
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">¥4,800,000</div>
+                  <div className="text-2xl font-bold">
+                    {summary ? `¥${summary.totalProfit.toLocaleString()}` : '¥0'}
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    粗利率 <span className="text-blue-600">14.9%</span>
+                    粗利率 <span className={`font-medium ${summary && summary.avgProfitRate >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                      {summary ? `${summary.avgProfitRate.toFixed(1)}%` : '0.0%'}
+                    </span>
                   </p>
                 </CardContent>
               </Card>
@@ -164,26 +313,41 @@ export default function ReportsPage() {
                 <CardDescription>仕入れ・納品・粗利の月別推移</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={monthlyData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
-                      <YAxis stroke="#64748b" fontSize={12} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "white",
-                          border: "1px solid #e2e8f0",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Legend />
-                      <Line type="monotone" dataKey="purchase" stroke="#ef4444" strokeWidth={3} name="仕入れ金額" />
-                      <Line type="monotone" dataKey="delivery" stroke="#22c55e" strokeWidth={3} name="納品金額" />
-                      <Line type="monotone" dataKey="profit" stroke="#3b82f6" strokeWidth={3} name="粗利" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+                {loading ? (
+                  <div className="h-80 flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                    <span className="ml-2">データを読み込み中...</span>
+                  </div>
+                ) : monthlyData.length === 0 ? (
+                  <div className="h-80 flex items-center justify-center">
+                    <p className="text-muted-foreground">表示するデータがありません</p>
+                  </div>
+                ) : (
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={monthlyData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
+                        <YAxis stroke="#64748b" fontSize={12} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "white",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "8px",
+                          }}
+                          formatter={(value: any, name: string) => [
+                            `¥${Number(value).toLocaleString()}`,
+                            name
+                          ]}
+                        />
+                        <Legend />
+                        <Line type="monotone" dataKey="purchase" stroke="#ef4444" strokeWidth={3} name="仕入れ金額" />
+                        <Line type="monotone" dataKey="delivery" stroke="#22c55e" strokeWidth={3} name="納品金額" />
+                        <Line type="monotone" dataKey="profit" stroke="#3b82f6" strokeWidth={3} name="粗利" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -197,25 +361,38 @@ export default function ReportsPage() {
                   <CardDescription>取扱商品の構成比率</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={categoryData}
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={80}
-                          dataKey="value"
-                          label={({ name, value }) => `${name}: ${value}%`}
-                        >
-                          {categoryData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
+                  {loading ? (
+                    <div className="h-64 flex items-center justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="ml-2">データを読み込み中...</span>
+                    </div>
+                  ) : categoryData.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center">
+                      <p className="text-muted-foreground">表示するデータがありません</p>
+                    </div>
+                  ) : (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={categoryData}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={80}
+                            dataKey="value"
+                            label={({ name, value }) => `${name}: ${Number(value).toFixed(1)}%`}
+                          >
+                            {categoryData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            formatter={(value: any) => [`${Number(value).toFixed(1)}%`, '構成比']}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -225,20 +402,31 @@ export default function ReportsPage() {
                   <CardDescription>各カテゴリーの売上実績</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {categoryData.map((category) => (
-                      <div key={category.name} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-4 h-4 rounded-full" style={{ backgroundColor: category.color }} />
-                          <span className="font-medium">{category.name}</span>
+                  {loading ? (
+                    <div className="flex items-center justify-center p-8">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="ml-2">データを読み込み中...</span>
+                    </div>
+                  ) : categoryData.length === 0 ? (
+                    <div className="text-center p-8">
+                      <p className="text-muted-foreground">表示するデータがありません</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {categoryData.map((category) => (
+                        <div key={category.name} className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-4 h-4 rounded-full" style={{ backgroundColor: category.color }} />
+                            <span className="font-medium">{category.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold">¥{Number(category.purchaseAmount || 0).toLocaleString()}</div>
+                            <div className="text-sm text-muted-foreground">{Number(category.value || 0).toFixed(1)}%</div>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <div className="font-bold">¥{(category.value * 100000).toLocaleString()}</div>
-                          <div className="text-sm text-muted-foreground">{category.value}%</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -252,26 +440,41 @@ export default function ReportsPage() {
                 <CardDescription>主要仕入れ先の取引実績</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={supplierData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
-                      <YAxis stroke="#64748b" fontSize={12} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "white",
-                          border: "1px solid #e2e8f0",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Legend />
-                      <Bar dataKey="purchase" fill="#ef4444" name="仕入れ金額" />
-                      <Bar dataKey="delivery" fill="#22c55e" name="納品金額" />
-                      <Bar dataKey="profit" fill="#3b82f6" name="粗利" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                {loading ? (
+                  <div className="h-80 flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                    <span className="ml-2">データを読み込み中...</span>
+                  </div>
+                ) : supplierData.length === 0 ? (
+                  <div className="h-80 flex items-center justify-center">
+                    <p className="text-muted-foreground">表示するデータがありません</p>
+                  </div>
+                ) : (
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={supplierData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
+                        <YAxis stroke="#64748b" fontSize={12} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "white",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "8px",
+                          }}
+                          formatter={(value: any, name: string) => [
+                            `¥${Number(value).toLocaleString()}`,
+                            name
+                          ]}
+                        />
+                        <Legend />
+                        <Bar dataKey="purchase" fill="#ef4444" name="仕入れ金額" />
+                        <Bar dataKey="delivery" fill="#22c55e" name="納品金額" />
+                        <Bar dataKey="profit" fill="#3b82f6" name="粗利" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -285,28 +488,35 @@ export default function ReportsPage() {
                   <CardDescription>月別の粗利率変化</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart
-                        data={monthlyData.map((item) => ({
-                          ...item,
-                          profitRate: ((item.profit / item.delivery) * 100).toFixed(1),
-                        }))}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
-                        <YAxis stroke="#64748b" fontSize={12} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "white",
-                            border: "1px solid #e2e8f0",
-                            borderRadius: "8px",
-                          }}
-                        />
-                        <Line type="monotone" dataKey="profitRate" stroke="#8b5cf6" strokeWidth={3} name="粗利率(%)" />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
+                  {loading ? (
+                    <div className="h-64 flex items-center justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="ml-2">データを読み込み中...</span>
+                    </div>
+                  ) : profitData?.monthlyProfitRates?.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center">
+                      <p className="text-muted-foreground">表示するデータがありません</p>
+                    </div>
+                  ) : (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={profitData?.monthlyProfitRates || []}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
+                          <YAxis stroke="#64748b" fontSize={12} />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "white",
+                              border: "1px solid #e2e8f0",
+                              borderRadius: "8px",
+                            }}
+                            formatter={(value: any) => [`${Number(value).toFixed(1)}%`, '粗利率']}
+                          />
+                          <Line type="monotone" dataKey="profitRate" stroke="#8b5cf6" strokeWidth={3} name="粗利率(%)" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -316,24 +526,43 @@ export default function ReportsPage() {
                   <CardDescription>主要な収益性指標</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
-                      <span className="font-medium">平均粗利率</span>
-                      <Badge variant="secondary">14.9%</Badge>
+                  {loading ? (
+                    <div className="flex items-center justify-center p-8">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="ml-2">データを読み込み中...</span>
                     </div>
-                    <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
-                      <span className="font-medium">月平均売上</span>
-                      <Badge variant="secondary">¥3,589,000</Badge>
+                  ) : !profitData ? (
+                    <div className="text-center p-8">
+                      <p className="text-muted-foreground">表示するデータがありません</p>
                     </div>
-                    <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
-                      <span className="font-medium">月平均粗利</span>
-                      <Badge variant="secondary">¥533,000</Badge>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
+                        <span className="font-medium">平均粗利率</span>
+                        <Badge variant="secondary">
+                          {profitData.avgProfitRate ? `${profitData.avgProfitRate.toFixed(1)}%` : '0.0%'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
+                        <span className="font-medium">月平均売上</span>
+                        <Badge variant="secondary">
+                          ¥{profitData.avgMonthlySales ? profitData.avgMonthlySales.toLocaleString() : '0'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
+                        <span className="font-medium">月平均粗利</span>
+                        <Badge variant="secondary">
+                          ¥{profitData.avgMonthlyProfit ? profitData.avgMonthlyProfit.toLocaleString() : '0'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
+                        <span className="font-medium">最高月売上</span>
+                        <Badge variant="secondary">
+                          ¥{profitData.maxMonthlySales ? profitData.maxMonthlySales.toLocaleString() : '0'}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
-                      <span className="font-medium">最高月売上</span>
-                      <Badge variant="secondary">¥4,200,000</Badge>
-                    </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
