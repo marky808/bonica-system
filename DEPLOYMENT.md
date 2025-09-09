@@ -20,6 +20,10 @@ Vercelプロジェクトの**Settings** → **Environment Variables**で以下�
 
 #### 必須の環境変数
 ```bash
+# データベース設定（PostgreSQL用）
+DATABASE_PROVIDER="postgresql"
+# DATABASE_URL と DIRECT_URL は PostgreSQL 作成時に自動設定される
+
 # JWT認証（強力なランダム文字列に変更）
 JWT_SECRET="RNCw7amJ3Df9RLFYBvlB/ZQFdGz2hZ4JK7Fw8Zog5QUSUeAGTp7GYWaW62t7E7Iy
 SdIHw3hYt2Szdgylx2OqiQ=="
@@ -31,6 +35,9 @@ INIT_SECRET_KEY="8YEwoMWlaMUh3J1HDzQWneBcvNPwAwYUzkEIdVS808I="
 INITIAL_ADMIN_EMAIL="808works@gmail.com"
 INITIAL_ADMIN_NAME="小西正高"
 INITIAL_ADMIN_PASSWORD="6391"
+
+# JWT有効期限（オプション）
+JWT_EXPIRES_IN="7d"
 
 # Google Sheets API（必要に応じて）
 GOOGLE_SHEETS_CLIENT_EMAIL="your-service-account@your-project.iam.gserviceaccount.com"
@@ -92,23 +99,53 @@ curl -X POST https://your-app.vercel.app/api/admin/init \
 
 ## 🛠 トラブルシューティング
 
+### ❌ ログインできない問題
+**症状**: ログイン画面で認証情報を入力してもログインできない
+
+**原因と対処法**:
+1. **JWT_SECRETが未設定**
+   ```
+   Error: サーバー設定エラー
+   ```
+   → Vercel環境変数で`JWT_SECRET`を確認・設定
+
+2. **データベースが初期化されていない**
+   ```
+   Error: ユーザーが見つかりません
+   ```
+   → データベース初期化APIを実行（下記参照）
+
+3. **PostgreSQL接続エラー**
+   ```
+   Error: Can't reach database server
+   ```
+   → `DATABASE_PROVIDER="postgresql"`が設定されているか確認
+   → PostgreSQL環境変数（`DATABASE_URL`, `DIRECT_URL`）を確認
+
 ### データベース接続エラー
 ```
 Error: Can't reach database server
 ```
-→ PostgreSQL環境変数（`DATABASE_URL`, `DIRECT_URL`）を確認
+**対処法**:
+- PostgreSQL環境変数（`DATABASE_URL`, `DIRECT_URL`）を確認
+- `DATABASE_PROVIDER="postgresql"`が設定されているか確認
+- Vercel Postgres データベースが作成されているか確認
 
 ### 初期化API認証エラー
 ```
 {"error":"Unauthorized: Invalid init key"}
 ```
-→ `INIT_SECRET_KEY`環境変数が正しく設定されているか確認
+**対処法**:
+- `INIT_SECRET_KEY`環境変数が正しく設定されているか確認
+- 初期化APIの認証ヘッダーが正しいか確認
 
 ### ビルドエラー
 ```
 Build failed
 ```
-→ TypeScript設定で一時的に`ignoreBuildErrors: true`が設定済み
+**対処法**:
+- TypeScript設定で一時的に`ignoreBuildErrors: true`が設定済み
+- Prisma生成エラーの場合：`DATABASE_PROVIDER`環境変数を確認
 
 ## 🔧 本番運用前のチェックリスト
 
