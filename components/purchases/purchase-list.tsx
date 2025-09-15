@@ -35,12 +35,14 @@ export function PurchaseList({ purchases, onEdit, onDelete, onView, loading = fa
   const [error, setError] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [hasInitialized, setHasInitialized] = useState(false)
   const itemsPerPage = 20
 
-  // Load initial data on component mount
+  // Load initial data on component mount - ONLY ONCE
   useEffect(() => {
     const loadData = async () => {
-      if (purchases.length === 0) {
+      if (!hasInitialized && purchases.length === 0) {
+        setHasInitialized(true)
         setDataLoading(true)
         setError('')
         try {
@@ -72,7 +74,7 @@ export function PurchaseList({ purchases, onEdit, onDelete, onView, loading = fa
     }
 
     loadData()
-  }, [purchases.length, onRefresh])
+  }, [hasInitialized, purchases.length]) // Remove onRefresh from dependencies
 
   // Load categories and suppliers separately if purchases already exist
   useEffect(() => {
@@ -125,7 +127,6 @@ export function PurchaseList({ purchases, onEdit, onDelete, onView, loading = fa
         )
       default:
         return <Badge variant="outline">不明</Badge>
-    }
   }
 
   const getCategoryName = (purchase: Purchase) => {
