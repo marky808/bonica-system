@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -48,39 +48,48 @@ export function DeliveryList({
   const [customers, setCustomers] = useState<Customer[]>([])
   const itemsPerPage = 20
 
-  // Load deliveries on component mount
+  // Use ref to track if we've already initialized data
+  const dataInitialized = useRef(false)
+
+  // Load deliveries on component mount - ONLY ONCE EVER
   useEffect(() => {
     const loadData = async () => {
-      if (deliveries.length === 0) {
-        setDataLoading(true)
-        setError('')
-        try {
-          const [deliveriesRes, customersRes] = await Promise.all([
-            apiClient.getDeliveries(),
-            apiClient.getCustomers()
-          ])
-          
-          if (deliveriesRes.data) {
-            onRefresh(deliveriesRes.data.deliveries)
-          } else {
-            setError(deliveriesRes.error || '納品データの取得に失敗しました')
-          }
-          
-          if (customersRes.data) {
-            setCustomers(customersRes.data)
-          }
-        } catch (err) {
-          setError('通信エラーが発生しました')
-        } finally {
-          setDataLoading(false)
+      // Check if we already have data or if initialization was already attempted
+      if (dataInitialized.current || deliveries.length > 0) {
+        return
+      }
+
+      dataInitialized.current = true
+      setDataLoading(true)
+      setError('')
+      
+      try {
+        const [deliveriesRes, customersRes] = await Promise.all([
+          apiClient.getDeliveries(),
+          apiClient.getCustomers()
+        ])
+        
+        if (deliveriesRes.data && deliveriesRes.data.deliveries) {
+          onRefresh(deliveriesRes.data.deliveries)
+        } else {
+          setError(deliveriesRes.error || '納品データの取得に失敗しました')
         }
+        
+        if (customersRes.data) {
+          setCustomers(customersRes.data)
+        }
+      } catch (err) {
+        console.error('Data loading error:', err)
+        setError('通信エラーが発生しました')
+      } finally {
+        setDataLoading(false)
       }
     }
 
     loadData()
-  }, [deliveries.length, onRefresh])
+  }, []) // Empty dependency array
 
-  // Load customers separately if deliveries already exist
+  // Separate effect to load master data if deliveries exist but customers don't
   useEffect(() => {
     const loadMasterData = async () => {
       if (deliveries.length > 0 && customers.length === 0) {
@@ -96,7 +105,10 @@ export function DeliveryList({
       }
     }
 
-    loadMasterData()
+    // Only run this if we have deliveries but no customers
+    if (deliveries.length > 0 && customers.length === 0) {
+      loadMasterData()
+    }
   }, [deliveries.length, customers.length])
 
   const formatCurrency = (amount: number) => {
