@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+
 const createCustomerSchema = z.object({
   companyName: z.string().min(1, '会社名を入力してください'),
   contactPerson: z.string().min(1, '担当者名を入力してください'),

@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { verifyToken } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+
 const createDeliverySchema = z.object({
   customerId: z.string().min(1, 'お客様を選択してください'),
   deliveryDate: z.string().min(1, '納品日を入力してください'),
