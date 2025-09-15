@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -11,7 +11,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Search, Filter, Edit, Trash2, Eye, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { apiClient, type Purchase, type Category, type Supplier } from "@/lib/api"
 import { useIsMobile } from "@/hooks/use-mobile"
-
 
 interface PurchaseListProps {
   purchases: Purchase[]
@@ -35,51 +34,58 @@ export function PurchaseList({ purchases, onEdit, onDelete, onView, loading = fa
   const [error, setError] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [hasInitialized, setHasInitialized] = useState(false)
   const itemsPerPage = 20
 
-  // Load initial data on component mount - ONLY ONCE
+  // Use ref to track if we've already initialized data
+  const dataInitialized = useRef(false)
+
+  // Load initial data on component mount - ONLY ONCE EVER
   useEffect(() => {
     const loadData = async () => {
-      if (!hasInitialized && purchases.length === 0) {
-        setHasInitialized(true)
-        setDataLoading(true)
-        setError('')
-        try {
-          const [purchasesRes, categoriesRes, suppliersRes] = await Promise.all([
-            apiClient.getPurchases(),
-            apiClient.getCategories(),
-            apiClient.getSuppliers()
-          ])
-          
-          if (purchasesRes.data) {
-            onRefresh(purchasesRes.data.purchases)
-          } else {
-            setError(purchasesRes.error || '仕入れデータの取得に失敗しました')
-          }
-          
-          if (categoriesRes.data) {
-            setCategories(categoriesRes.data)
-          }
-          
-          if (suppliersRes.data) {
-            setSuppliers(suppliersRes.data)
-          }
-        } catch (err) {
-          setError('通信エラーが発生しました')
-        } finally {
-          setDataLoading(false)
+      // Check if we already have data or if initialization was already attempted
+      if (dataInitialized.current || purchases.length > 0) {
+        return
+      }
+
+      dataInitialized.current = true
+      setDataLoading(true)
+      setError('')
+      
+      try {
+        const [purchasesRes, categoriesRes, suppliersRes] = await Promise.all([
+          apiClient.getPurchases(),
+          apiClient.getCategories(),
+          apiClient.getSuppliers()
+        ])
+        
+        if (purchasesRes.data && purchasesRes.data.purchases) {
+          onRefresh(purchasesRes.data.purchases)
+        } else {
+          setError(purchasesRes.error || '仕入れデータの取得に失敗しました')
         }
+        
+        if (categoriesRes.data) {
+          setCategories(categoriesRes.data)
+        }
+        
+        if (suppliersRes.data) {
+          setSuppliers(suppliersRes.data)
+        }
+      } catch (err) {
+        console.error('Data loading error:', err)
+        setError('通信エラーが発生しました')
+      } finally {
+        setDataLoading(false)
       }
     }
 
     loadData()
-  }, [hasInitialized, purchases.length]) // Remove onRefresh from dependencies
+  }, []) // Empty dependency array
 
-  // Load categories and suppliers separately if purchases already exist
+  // Separate effect to load master data if purchases exist but categories don't
   useEffect(() => {
     const loadMasterData = async () => {
-      if (purchases.length > 0 && categories.length === 0) {
+      if (purchases.length > 0 && categories.length === 0 && suppliers.length === 0) {
         try {
           const [categoriesRes, suppliersRes] = await Promise.all([
             apiClient.getCategories(),
@@ -99,8 +105,11 @@ export function PurchaseList({ purchases, onEdit, onDelete, onView, loading = fa
       }
     }
 
-    loadMasterData()
-  }, [purchases.length, categories.length])
+    // Only run this if we have purchases but no categories/suppliers
+    if (purchases.length > 0 && categories.length === 0 && suppliers.length === 0) {
+      loadMasterData()
+    }
+  }, [purchases.length, categories.length, suppliers.length])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("ja-JP", {
@@ -127,6 +136,7 @@ export function PurchaseList({ purchases, onEdit, onDelete, onView, loading = fa
         )
       default:
         return <Badge variant="outline">不明</Badge>
+    }
   }
 
   const getCategoryName = (purchase: Purchase) => {
@@ -220,6 +230,7 @@ export function PurchaseList({ purchases, onEdit, onDelete, onView, loading = fa
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+        
         {/* 検索・フィルタエリア */}
         <div className="space-y-4 mb-6">
           <div className="flex flex-col lg:flex-row gap-4">
@@ -476,31 +487,31 @@ export function PurchaseList({ purchases, onEdit, onDelete, onView, loading = fa
 
         {/* ページネーション */}
         {filteredPurchases.length > 0 && (
-        <div className="flex items-center justify-between mt-6">
-          <div className="text-sm text-muted-foreground">
-            {startIndex + 1}-{Math.min(startIndex + itemsPerPage, sortedPurchases.length)} / {sortedPurchases.length}件
+          <div className="flex items-center justify-between mt-6">
+            <div className="text-sm text-muted-foreground">
+              {startIndex + 1}-{Math.min(startIndex + itemsPerPage, sortedPurchases.length)} / {sortedPurchases.length}件
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                前へ
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                次へ
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              前へ
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-            >
-              次へ
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
         )}
       </CardContent>
     </Card>
