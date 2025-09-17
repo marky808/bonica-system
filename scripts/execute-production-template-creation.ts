@@ -33,9 +33,7 @@ async function executeTemplateCreation() {
     console.log('📊 テンプレート作成API呼び出し中...')
 
     const endpoints = [
-      '/api/sheets-templates-create',
-      '/api/create-templates',
-      '/api/admin/create-google-sheets-templates',
+      '/api/templates/create',
       '/api/google-sheets/templates'
     ]
 

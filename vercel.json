@@ -12,6 +12,9 @@
     },
     "app/api/admin/init/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/templates/create/route.ts": {
+      "maxDuration": 60
     }
   },
   "env": {
