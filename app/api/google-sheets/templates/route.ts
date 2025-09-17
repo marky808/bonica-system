@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,13 +7,8 @@ export async function GET(request: NextRequest) {
 
     const whereClause = type ? { type } : {};
 
-    const templates = await prisma.googleSheetTemplate.findMany({
-      where: whereClause,
-      orderBy: [
-        { type: 'asc' },
-        { name: 'asc' }
-      ]
-    });
+    // TODO: Re-implement database integration
+    const templates: any[] = [];
 
     return NextResponse.json(templates);
   } catch (error) {
@@ -240,13 +234,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const template = await prisma.googleSheetTemplate.create({
-        data: {
-          name,
-          type,
-          templateSheetId
-        }
-      });
+      // TODO: Re-implement database integration
+      const template = { id: 'temp', name, type, templateSheetId };
 
       return NextResponse.json(template, { status: 201 });
     }
