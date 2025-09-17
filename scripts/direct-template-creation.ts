@@ -119,52 +119,39 @@ async function createTemplatesDirectly() {
       }
     }
 
-    // 3. Google Sheets APIを通じた直接作成の試行
-    console.log('🔧 Google Sheets APIを使用したテンプレート作成試行中...')
+    // 3. 既存の /api/google-sheets/templates エンドポイントでシート作成を試行
+    console.log('🔧 /api/google-sheets/templates を使用してテンプレート作成中...')
 
-    // システムの健康状態を確認
-    const healthResponse = await fetch(`${PRODUCTION_URL}/api/health`)
-    if (healthResponse.ok) {
-      const health = await healthResponse.json()
-      console.log('💚 システム状態:', health.message)
-    }
-
-    // 本番環境でのGoogle Sheets設定確認
-    console.log('🔍 Google Sheets設定確認中...')
-
-    // 新しいシートを作成するAPIエンドポイントが存在するか確認
-    const endpoints = [
-      '/api/create-templates',
-      '/api/admin/create-google-sheets-templates',
-      '/api/google-sheets/create-templates'
-    ]
-
-    for (const endpoint of endpoints) {
-      console.log(`🔗 ${endpoint} をテスト中...`)
-
-      const testResponse = await fetch(`${PRODUCTION_URL}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          test: true,
-          spreadsheetId: SPREADSHEET_ID
-        })
+    const createResponse = await fetch(`${PRODUCTION_URL}/api/google-sheets/templates`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        createSheets: true
       })
+    })
 
-      console.log(`📡 ${endpoint} レスポンス: ${testResponse.status}`)
+    console.log(`📡 テンプレート作成API レスポンス: ${createResponse.status}`)
 
-      if (testResponse.ok) {
-        const result = await testResponse.json()
-        console.log('✅ テンプレート作成成功!')
-        console.log('📊 結果:', result)
-        return result
-      } else if (testResponse.status !== 404 && testResponse.status !== 405) {
-        const errorText = await testResponse.text()
-        console.log(`⚠️ ${endpoint} エラー:`, errorText)
+    if (createResponse.ok) {
+      const result = await createResponse.json()
+      console.log('✅ テンプレート作成成功!')
+      console.log('📊 作成結果:', JSON.stringify(result, null, 2))
+
+      if (result.templates) {
+        console.log('')
+        console.log('🔗 テンプレートURL:')
+        console.log(`納品書: ${result.templates.delivery?.url}`)
+        console.log(`請求書: ${result.templates.invoice?.url}`)
       }
+
+      return result
+    } else {
+      const errorText = await createResponse.text()
+      console.log(`❌ テンプレート作成エラー: ${createResponse.status}`)
+      console.log(`エラー詳細: ${errorText}`)
     }
 
     // 手動作成指示

@@ -31,27 +31,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, type, templateSheetId, createSheets } = body;
 
-    // 既存のテンプレート登録機能
-    if (name && type && templateSheetId) {
-      if (!['delivery', 'invoice'].includes(type)) {
-        return NextResponse.json(
-          { error: 'Type must be either "delivery" or "invoice"' },
-          { status: 400 }
-        );
-      }
-
-      const template = await prisma.googleSheetTemplate.create({
-        data: {
-          name,
-          type,
-          templateSheetId
-        }
-      });
-
-      return NextResponse.json(template, { status: 201 });
-    }
-
-    // 新機能: 実際のGoogle Sheetsテンプレート作成
+    // 新機能: 実際のGoogle Sheetsテンプレート作成（優先処理）
     if (createSheets === true) {
       const { google } = require('googleapis');
 
@@ -250,6 +230,27 @@ export async function POST(request: NextRequest) {
         }
       });
     }
+
+    // 既存のテンプレート登録機能
+    if (name && type && templateSheetId) {
+      if (!['delivery', 'invoice'].includes(type)) {
+        return NextResponse.json(
+          { error: 'Type must be either "delivery" or "invoice"' },
+          { status: 400 }
+        );
+      }
+
+      const template = await prisma.googleSheetTemplate.create({
+        data: {
+          name,
+          type,
+          templateSheetId
+        }
+      });
+
+      return NextResponse.json(template, { status: 201 });
+    }
+
 
     return NextResponse.json(
       { error: 'Invalid request. Provide either template registration data or set createSheets: true' },
