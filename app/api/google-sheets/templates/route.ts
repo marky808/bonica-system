@@ -5,12 +5,40 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type');
 
-    const whereClause = type ? { type } : {};
+    // 環境変数からシートIDを取得
+    const deliverySheetId = process.env.GOOGLE_SHEETS_DELIVERY_SHEET_ID;
+    const invoiceSheetId = process.env.GOOGLE_SHEETS_INVOICE_SHEET_ID;
+    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
 
-    // TODO: Re-implement database integration
-    const templates: any[] = [];
+    // テンプレート情報を構築
+    const templates = [];
 
-    return NextResponse.json(templates);
+    if (deliverySheetId && spreadsheetId) {
+      templates.push({
+        id: 'delivery-template',
+        name: '納品書テンプレート',
+        type: 'delivery',
+        templateSheetId: deliverySheetId,
+        spreadsheetId: spreadsheetId,
+        url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${deliverySheetId}`
+      });
+    }
+
+    if (invoiceSheetId && spreadsheetId) {
+      templates.push({
+        id: 'invoice-template',
+        name: '請求書テンプレート',
+        type: 'invoice',
+        templateSheetId: invoiceSheetId,
+        spreadsheetId: spreadsheetId,
+        url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${invoiceSheetId}`
+      });
+    }
+
+    // タイプでフィルタリング
+    const filteredTemplates = type ? templates.filter(t => t.type === type) : templates;
+
+    return NextResponse.json(filteredTemplates);
   } catch (error) {
     console.error('Error fetching Google Sheet templates:', error);
     return NextResponse.json(
