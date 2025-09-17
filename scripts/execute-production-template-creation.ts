@@ -11,7 +11,7 @@ const LOGIN_CREDENTIALS = {
 
 async function executeTemplateCreation() {
   console.log('🚀 本番環境でGoogle Sheetsテンプレート作成実行')
-  console.log('=' * 50)
+  console.log('='.repeat(50))
 
   try {
     // 1. ログイン
@@ -29,24 +29,62 @@ async function executeTemplateCreation() {
     const { token, user } = await loginResponse.json()
     console.log(`✅ ログイン成功: ${user.name}`)
 
-    // 2. テンプレート作成APIを呼び出し
+    // 2. テンプレート作成APIを呼び出し - 複数のエンドポイントを試行
     console.log('📊 テンプレート作成API呼び出し中...')
 
-    const createResponse = await fetch(`${PRODUCTION_URL}/api/admin/create-google-sheets-templates`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        createDeliveryTemplate: true,
-        createInvoiceTemplate: true
-      })
-    })
+    const endpoints = [
+      '/api/sheets-templates-create',
+      '/api/create-templates',
+      '/api/admin/create-google-sheets-templates',
+      '/api/google-sheets/templates'
+    ]
 
-    console.log(`📡 API応答ステータス: ${createResponse.status}`)
+    let createResponse: Response | null = null
+    let successEndpoint = ''
 
-    if (createResponse.ok) {
+    for (const endpoint of endpoints) {
+      console.log(`🔍 エンドポイント試行中: ${endpoint}`)
+
+      try {
+        let requestBody = {
+          createDeliveryTemplate: true,
+          createInvoiceTemplate: true
+        }
+
+        // /api/google-sheets/templates用の特別なパラメータ
+        if (endpoint === '/api/google-sheets/templates') {
+          requestBody = {
+            createSheets: true
+          } as any
+        }
+
+        const response = await fetch(`${PRODUCTION_URL}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        })
+
+        console.log(`📡 ${endpoint} 応答ステータス: ${response.status}`)
+
+        if (response.ok) {
+          createResponse = response
+          successEndpoint = endpoint
+          console.log(`✅ 成功エンドポイント: ${endpoint}`)
+          break
+        } else if (response.status !== 404 && response.status !== 405) {
+          // 404/405以外のエラーの場合は詳細を確認
+          const errorText = await response.text()
+          console.log(`⚠️ ${endpoint} エラー詳細: ${errorText}`)
+        }
+      } catch (error) {
+        console.log(`❌ ${endpoint} 接続エラー: ${error}`)
+      }
+    }
+
+    if (createResponse && createResponse.ok) {
       const result = await createResponse.json()
       console.log('✅ テンプレート作成成功!')
       console.log('')
@@ -62,10 +100,54 @@ async function executeTemplateCreation() {
 
       return result
     } else {
-      const errorText = await createResponse.text()
-      console.log('⚠️ API呼び出し失敗')
-      console.log(`ステータス: ${createResponse.status}`)
-      console.log(`エラー: ${errorText}`)
+      console.log('⚠️ 認証ありAPI呼び出しが全て失敗しました')
+      console.log('')
+
+      // 3. 認証なしでのテスト
+      console.log('🔧 認証なしでのエンドポイントテスト...')
+
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`🔍 認証なしテスト: ${endpoint}`)
+
+          let requestBody = {
+            createDeliveryTemplate: true,
+            createInvoiceTemplate: true
+          }
+
+          // /api/google-sheets/templates用の特別なパラメータ
+          if (endpoint === '/api/google-sheets/templates') {
+            requestBody = {
+              createSheets: true
+            } as any
+          }
+
+          const response = await fetch(`${PRODUCTION_URL}${endpoint}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+          })
+
+          console.log(`📡 ${endpoint} (認証なし) 応答: ${response.status}`)
+
+          if (response.ok) {
+            const result = await response.json()
+            console.log(`✅ 認証なしで成功: ${endpoint}`)
+            console.log('📊 作成結果:')
+            console.log(JSON.stringify(result, null, 2))
+            return result
+          } else if (response.status === 401) {
+            console.log(`🔐 ${endpoint} 認証が必要`)
+          } else {
+            const errorText = await response.text()
+            console.log(`⚠️ ${endpoint} エラー: ${response.status} - ${errorText}`)
+          }
+        } catch (error) {
+          console.log(`❌ ${endpoint} 接続エラー: ${error}`)
+        }
+      }
 
       // 代替案: 既存のGoogle Sheets設定を確認
       console.log('')
@@ -105,8 +187,8 @@ async function executeTemplateCreation() {
 
       return {
         status: 'failed',
-        error: errorText,
-        statusCode: createResponse.status
+        error: '全てのAPIエンドポイントが失敗しました',
+        testedEndpoints: endpoints
       }
     }
 
