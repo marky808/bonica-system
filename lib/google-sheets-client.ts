@@ -244,8 +244,8 @@ class GoogleSheetsClient {
       { range: 'B6', values: [[data.customer_address || '']] },
     ];
 
-    // 商品明細（A10から開始と仮定）
-    const itemsStartRow = 10;
+    // 商品明細（A11から開始 - BONICAシステム仕様準拠）
+    const itemsStartRow = 11;
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
       updates.push(
@@ -285,8 +285,8 @@ class GoogleSheetsClient {
       { range: 'B8', values: [[data.billing_address || '']] },
     ];
 
-    // 商品明細（A12から開始と仮定）
-    const itemsStartRow = 12;
+    // 商品明細（A13から開始 - BONICAシステム仕様準拠）
+    const itemsStartRow = 13;
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
       updates.push(
