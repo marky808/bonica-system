@@ -7,6 +7,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { deliveryId, templateId } = body;
 
+    console.log('📊 Delivery sheet creation request:', { deliveryId, templateId });
+
     if (!deliveryId || !templateId) {
       return NextResponse.json(
         { error: 'Delivery ID and template ID are required' },
@@ -15,6 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 納品データを取得
+    console.log('🔍 Fetching delivery data for ID:', deliveryId);
     const delivery = await prisma.delivery.findUnique({
       where: { id: deliveryId },
       include: {
@@ -28,14 +31,23 @@ export async function POST(request: NextRequest) {
     });
 
     if (!delivery) {
+      console.log('❌ Delivery not found:', deliveryId);
       return NextResponse.json(
         { error: 'Delivery not found' },
         { status: 404 }
       );
     }
 
+    console.log('✅ Delivery data retrieved:', {
+      id: delivery.id,
+      customer: delivery.customer?.companyName,
+      itemsCount: delivery.items.length
+    });
+
     // Google Sheetsクライアントを取得
+    console.log('🔧 Initializing Google Sheets client...');
     const googleSheetsClient = getGoogleSheetsClient();
+    console.log('✅ Google Sheets client initialized');
 
     // 納品書データを準備
     const deliveryData = {
@@ -53,8 +65,12 @@ export async function POST(request: NextRequest) {
       notes: delivery.notes || ''
     };
 
+    console.log('📋 Prepared delivery data:', deliveryData);
+
     // Google Sheetsに納品書を作成
+    console.log('📊 Creating delivery sheet with templateId:', templateId);
     const result = await googleSheetsClient.createDeliverySheet(deliveryData, templateId);
+    console.log('✅ Delivery sheet created:', result);
 
     // データベースを更新
     await prisma.delivery.update({
@@ -65,6 +81,8 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    console.log('✅ Database updated with sheet info');
+
     return NextResponse.json({
       success: true,
       sheetId: result.sheetId,
@@ -73,11 +91,18 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error creating delivery sheet:', error);
+    console.error('❌ DETAILED ERROR in delivery sheet creation:', error);
+    console.error('❌ Error name:', error instanceof Error ? error.name : 'Unknown');
+    console.error('❌ Error message:', error instanceof Error ? error.message : String(error));
+    console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack');
     
+    // デバッグ用：実際のエラー詳細を返す
     let errorMessage = 'Google Sheets納品書の作成に失敗しました';
+    let errorDetails = '';
     
     if (error instanceof Error) {
+      errorDetails = error.message;
+      
       if (error.message.includes('DECODER routines') || error.message.includes('JWT')) {
         errorMessage = 'Google Sheets APIの認証に失敗しました。システム管理者にお問い合わせください。';
       } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
@@ -92,7 +117,14 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json(
-      { error: errorMessage },
+      { 
+        error: errorMessage,
+        details: errorDetails,
+        debugInfo: process.env.NODE_ENV === 'development' ? {
+          errorType: error instanceof Error ? error.constructor.name : typeof error,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        } : undefined
+      },
       { status: 500 }
     );
   }

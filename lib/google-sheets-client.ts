@@ -156,8 +156,12 @@ class GoogleSheetsClient {
         throw new GoogleSheetsError('スプレッドシートIDが設定されていません', undefined, GoogleSheetsErrorCode.UNKNOWN_ERROR);
       }
 
-      // 新しいシートを作成
+      console.log('📊 Creating delivery sheet with:', { spreadsheetId, templateSheetId });
+
+      // 新しいシートを作成（テンプレートシートを複製）
       const newSheetName = `納品書_${data.delivery_number}_${data.customer_name}_${new Date().toISOString().slice(0, 10)}`;
+      
+      console.log('📋 Duplicating sheet:', { sourceSheetId: templateSheetId, newSheetName });
       
       const batchUpdateResponse = await this.sheets.spreadsheets.batchUpdate({
         spreadsheetId: spreadsheetId,
@@ -172,17 +176,35 @@ class GoogleSheetsClient {
       });
 
       const newSheetId = batchUpdateResponse.data.replies![0].duplicateSheet!.properties!.sheetId!.toString();
+      
+      console.log('✅ Sheet duplicated successfully:', { newSheetId, newSheetName });
 
-      // データを更新
-      await this.updateDeliverySheet(spreadsheetId, newSheetId, data);
+      // データを更新（シート名を使用）
+      await this.updateDeliverySheet(spreadsheetId, newSheetName, data);
 
       const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${newSheetId}`;
+      
+      console.log('🎉 Delivery sheet creation completed:', { sheetId: newSheetId, url });
+      
       return { sheetId: newSheetId, url };
     } catch (error) {
+      console.error('❌ Error in createDeliverySheet:', error);
+      
       if (error instanceof GoogleSheetsError) {
         throw error;
       }
-      console.error('Error in createDeliverySheet:', error);
+      
+      // より詳細なエラー情報をログ出力
+      if (error && typeof error === 'object') {
+        console.error('❌ Error details:', {
+          name: (error as any).name,
+          message: (error as any).message,
+          code: (error as any).code,
+          status: (error as any).status,
+          errors: (error as any).errors
+        });
+      }
+      
       this.handleGoogleAPIError(error, 'createDeliverySheet');
     }
   }
@@ -243,13 +265,15 @@ class GoogleSheetsClient {
     }
   }
 
-  private async updateDeliverySheet(spreadsheetId: string, sheetId: string, data: DeliveryData) {
+  private async updateDeliverySheet(spreadsheetId: string, sheetName: string, data: DeliveryData) {
+    console.log('📊 Updating delivery sheet:', { spreadsheetId, sheetName });
+    
     const updates = [
       // 基本情報
-      { range: `'${sheetId}'!B3`, values: [[data.delivery_number]] },
-      { range: `'${sheetId}'!B4`, values: [[data.delivery_date]] },
-      { range: `'${sheetId}'!B5`, values: [[data.customer_name]] },
-      { range: `'${sheetId}'!B6`, values: [[data.customer_address || '']] },
+      { range: `'${sheetName}'!B3`, values: [[data.delivery_number]] },
+      { range: `'${sheetName}'!B4`, values: [[data.delivery_date]] },
+      { range: `'${sheetName}'!B5`, values: [[data.customer_name]] },
+      { range: `'${sheetName}'!B6`, values: [[data.customer_address || '']] },
     ];
 
     // 商品明細（A11から開始 - BONICAシステム仕様準拠）
@@ -257,20 +281,22 @@ class GoogleSheetsClient {
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
       updates.push(
-        { range: `'${sheetId}'!A${row}`, values: [[item.product_name]] },
-        { range: `'${sheetId}'!B${row}`, values: [[item.quantity]] },
-        { range: `'${sheetId}'!C${row}`, values: [[item.unit_price]] },
-        { range: `'${sheetId}'!D${row}`, values: [[item.amount]] }
+        { range: `'${sheetName}'!A${row}`, values: [[item.product_name]] },
+        { range: `'${sheetName}'!B${row}`, values: [[item.quantity]] },
+        { range: `'${sheetName}'!C${row}`, values: [[item.unit_price]] },
+        { range: `'${sheetName}'!D${row}`, values: [[item.amount]] }
       );
     });
 
     // 合計金額
-    updates.push({ range: `'${sheetId}'!D${itemsStartRow + data.items.length + 2}`, values: [[data.total_amount]] });
+    updates.push({ range: `'${sheetName}'!D${itemsStartRow + data.items.length + 2}`, values: [[data.total_amount]] });
 
     // 備考
     if (data.notes) {
-      updates.push({ range: `'${sheetId}'!A${itemsStartRow + data.items.length + 5}`, values: [[data.notes]] });
+      updates.push({ range: `'${sheetName}'!A${itemsStartRow + data.items.length + 5}`, values: [[data.notes]] });
     }
+
+    console.log('📊 Batch update ranges:', updates.map(u => u.range));
 
     // 一括更新
     await this.sheets.spreadsheets.values.batchUpdate({
@@ -280,6 +306,8 @@ class GoogleSheetsClient {
         data: updates
       }
     });
+
+    console.log('✅ Delivery sheet updated successfully');
   }
 
   private async updateInvoiceSheet(sheetId: string, data: InvoiceData) {
