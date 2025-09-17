@@ -17,7 +17,8 @@
     "test:workflow": "tsx scripts/test-workflow.ts",
     "test:integration": "tsx scripts/integration-tests.ts",
     "test:report": "tsx scripts/generate-report.ts",
-    "vercel-build": "npm run postinstall && next build",
+    "vercel-build": "npm run postinstall && rm -rf .next && next build",
+    "cache-clear": "rm -rf .next && rm -rf node_modules/.cache",
     "postinstall": "prisma generate",
     "type-check": "tsc --noEmit"
   },
