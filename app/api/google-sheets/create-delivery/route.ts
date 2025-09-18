@@ -115,8 +115,16 @@ export async function POST(request: NextRequest) {
     console.log('✅ Database updated with sheet info and status changed to DELIVERED:', {
       id: updatedDelivery.id,
       status: updatedDelivery.status,
-      googleSheetId: updatedDelivery.googleSheetId
+      googleSheetId: updatedDelivery.googleSheetId,
+      deliveryNumber: updatedDelivery.deliveryNumber
     });
+
+    // デバッグ用：更新後のdeliveryデータを再取得して確認
+    const verifyDelivery = await prisma.delivery.findUnique({
+      where: { id: deliveryId },
+      select: { id: true, status: true, deliveryNumber: true, googleSheetId: true }
+    });
+    console.log('🔍 Verification - Current delivery status in DB:', verifyDelivery);
 
     return NextResponse.json({
       success: true,

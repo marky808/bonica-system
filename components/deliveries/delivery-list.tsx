@@ -130,8 +130,12 @@ export function DeliveryList({
             キャンセル
           </Badge>
         )
+      case "ERROR":
+        return <Badge className="bg-red-500">エラー</Badge>
+      case "INVOICED":
+        return <Badge className="bg-blue-500">請求済み</Badge>
       default:
-        return <Badge variant="outline">不明</Badge>
+        return <Badge variant="outline">不明 ({status})</Badge>
     }
   }
 
