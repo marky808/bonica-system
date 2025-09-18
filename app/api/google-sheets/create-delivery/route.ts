@@ -64,32 +64,66 @@ export async function POST(request: NextRequest) {
     console.log('🔍 Delivery ID for number generation:', delivery.id);
     console.log('🔍 Existing delivery number:', delivery.deliveryNumber);
 
-    // 安全な納品書番号生成ロジックの改善
+    // 改善された納品書番号生成ロジック - より安全で確実な方式
     let generatedNumber = 'DEL-UNKNOWN';
 
     try {
-      if (delivery.id) {
-        // delivery.idが文字列でも数値でも対応
+      if (delivery.deliveryNumber && delivery.deliveryNumber.trim() !== '') {
+        // 既に納品番号が設定されている場合はそれを使用
+        generatedNumber = delivery.deliveryNumber;
+        console.log('✅ Using existing delivery number:', generatedNumber);
+      } else if (delivery.id) {
+        // delivery.idベースの納品番号生成（文字列・数値両対応）
         const idString = String(delivery.id);
-        if (idString.length >= 8) {
-          generatedNumber = `DEL-${idString.slice(0, 8)}`;
+        
+        // cuidの場合（cl***形式）の処理
+        if (idString.startsWith('cl') && idString.length >= 10) {
+          const uniquePart = idString.slice(2, 10); // "cl"を除いた8文字
+          generatedNumber = `DEL-${uniquePart.toUpperCase()}`;
+        } 
+        // UUIDの場合の処理
+        else if (idString.includes('-') && idString.length >= 36) {
+          const shortId = idString.replace(/-/g, '').slice(0, 8).toUpperCase();
+          generatedNumber = `DEL-${shortId}`;
+        }
+        // その他のID形式の処理
+        else if (idString.length >= 8) {
+          generatedNumber = `DEL-${idString.slice(0, 8).toUpperCase()}`;
         } else {
           generatedNumber = `DEL-${idString.padStart(8, '0')}`;
         }
+        
+        console.log('✅ Generated delivery number from ID:', {
+          originalId: delivery.id,
+          generatedNumber: generatedNumber
+        });
       } else {
-        // フォールバック: 現在時刻ベースの番号
+        // 最終フォールバック: タイムスタンプベース
         const timestamp = Date.now().toString();
-        generatedNumber = `DEL-${timestamp.slice(-8)}`;
+        const shortTimestamp = timestamp.slice(-8);
+        generatedNumber = `DEL-${shortTimestamp}`;
+        
+        console.log('⚠️ Using timestamp-based fallback number:', generatedNumber);
+      }
+
+      // 納品番号の最終検証
+      if (!generatedNumber || generatedNumber === 'DEL-UNKNOWN') {
+        throw new Error('Failed to generate valid delivery number');
       }
 
       console.log('✅ Delivery number generation successful:', {
         deliveryId: delivery.id,
-        generatedNumber: generatedNumber
+        finalNumber: generatedNumber
       });
     } catch (numberError) {
       console.error('❌ Delivery number generation failed:', numberError);
-      // 最終的なフォールバック
-      generatedNumber = `DEL-${Date.now().toString().slice(-8)}`;
+      
+      // 緊急フォールバック: 現在時刻 + ランダム文字列
+      const timestamp = Date.now().toString().slice(-6);
+      const randomSuffix = Math.random().toString(36).substring(2, 4).toUpperCase();
+      generatedNumber = `DEL-${timestamp}${randomSuffix}`;
+      
+      console.log('🆘 Emergency fallback delivery number:', generatedNumber);
     }
 
     const finalDeliveryNumber = delivery.deliveryNumber || generatedNumber;
@@ -126,7 +160,11 @@ export async function POST(request: NextRequest) {
       data: {
         googleSheetId: result.sheetId,
         googleSheetUrl: result.url,
-        status: 'DELIVERED' // Google Sheets納品書作成完了でDELIVEREDステータスに
+        status: 'DELIVERED', // Google Sheets納品書作成完了でDELIVEREDステータスに
+        // 納品番号が未設定の場合は生成した番号を保存
+        ...((!delivery.deliveryNumber || delivery.deliveryNumber.trim() === '') && {
+          deliveryNumber: finalDeliveryNumber
+        })
       }
     });
 
@@ -144,11 +182,22 @@ export async function POST(request: NextRequest) {
     });
     console.log('🔍 Verification - Current delivery status in DB:', verifyDelivery);
 
+    // PDFエクスポートを試行（失敗してもシート作成成功は維持）
+    let pdfUrl = null;
+    try {
+      console.log('📕 Attempting PDF export...');
+      pdfUrl = await googleSheetsClient.exportToPdf(result.sheetId);
+      console.log('✅ PDF export successful:', pdfUrl);
+    } catch (pdfError) {
+      console.warn('⚠️ PDF export failed (but sheet creation was successful):', pdfError);
+      // PDFエクスポート失敗はログに記録するが、全体の処理は成功とする
+    }
+
     return NextResponse.json({
       success: true,
       sheetId: result.sheetId,
       url: result.url,
-      pdfUrl: await googleSheetsClient.exportToPdf(result.sheetId)
+      pdfUrl: pdfUrl
     });
 
   } catch (error) {
@@ -177,6 +226,8 @@ export async function POST(request: NextRequest) {
         errorMessage = 'ネットワークエラーが発生しました。インターネット接続を確認してください。';
       } else if (error.message.includes('Template not found') || error.message.includes('テンプレート')) {
         errorMessage = 'テンプレートが存在しません。先にテンプレートを作成してください。';
+      } else if (error.message.includes('Invalid template sheet ID') || error.message.includes('テンプレートシートIDが無効')) {
+        errorMessage = 'テンプレートIDの形式が正しくありません。数値のみを入力してください。';
       }
     }
 

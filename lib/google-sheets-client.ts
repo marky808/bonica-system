@@ -158,18 +158,41 @@ class GoogleSheetsClient {
 
       console.log('📊 Creating delivery sheet with:', { spreadsheetId, templateSheetId });
 
-      // テンプレートIDの検証と数値変換
+      // テンプレートIDの詳細検証と数値変換の強化
       let sourceSheetId: number;
       try {
-        sourceSheetId = parseInt(templateSheetId);
-        if (isNaN(sourceSheetId)) {
-          throw new Error(`Invalid template sheet ID: ${templateSheetId}`);
+        // 空文字やnull/undefinedチェック
+        if (!templateSheetId || templateSheetId.trim() === '') {
+          throw new Error('Template sheet ID is empty or undefined');
         }
-        console.log('✅ Template sheet ID validated:', sourceSheetId);
+
+        // 数値変換前のフォーマットチェック
+        const trimmedId = templateSheetId.trim();
+        if (!/^\d+$/.test(trimmedId)) {
+          throw new Error(`Template sheet ID contains non-numeric characters: "${trimmedId}"`);
+        }
+
+        sourceSheetId = parseInt(trimmedId, 10);
+        
+        // 変換後の値の妥当性チェック
+        if (isNaN(sourceSheetId) || sourceSheetId < 0) {
+          throw new Error(`Invalid template sheet ID after parsing: ${sourceSheetId}`);
+        }
+        
+        // Google Sheetsの実際の制限をチェック
+        if (sourceSheetId > 2147483647) { // 32bit integer limit
+          throw new Error(`Template sheet ID exceeds maximum value: ${sourceSheetId}`);
+        }
+
+        console.log('✅ Template sheet ID validated successfully:', sourceSheetId);
       } catch (parseError) {
-        console.error('❌ Template sheet ID parsing failed:', parseError);
+        console.error('❌ Template sheet ID validation failed:', {
+          originalId: templateSheetId,
+          error: parseError instanceof Error ? parseError.message : String(parseError)
+        });
+        
         throw new GoogleSheetsError(
-          `テンプレートシートIDが無効です: ${templateSheetId}`,
+          `テンプレートシートIDが無効です: "${templateSheetId}" - ${parseError instanceof Error ? parseError.message : String(parseError)}`,
           parseError instanceof Error ? parseError : undefined,
           GoogleSheetsErrorCode.INVALID_DATA
         );
@@ -194,7 +217,15 @@ class GoogleSheetsClient {
           }
         });
       } catch (duplicateError: any) {
-        console.error('❌ Sheet duplication failed:', duplicateError);
+        console.error('❌ Sheet duplication failed:', {
+          sourceSheetId,
+          newSheetName,
+          error: duplicateError.message,
+          code: duplicateError.code,
+          status: duplicateError.status
+        });
+
+        // より具体的なエラーメッセージを提供
         if (duplicateError.message?.includes('Invalid requests[0].duplicateSheet: Source sheet id') ||
             duplicateError.message?.includes('Unable to parse range')) {
           throw new GoogleSheetsError(
@@ -202,7 +233,20 @@ class GoogleSheetsClient {
             duplicateError,
             GoogleSheetsErrorCode.TEMPLATE_NOT_FOUND
           );
+        } else if (duplicateError.code === 403 || duplicateError.status === 403) {
+          throw new GoogleSheetsError(
+            `テンプレートシート(ID: ${sourceSheetId})にアクセス権限がありません。共有設定を確認してください。`,
+            duplicateError,
+            GoogleSheetsErrorCode.AUTH_ERROR
+          );
+        } else if (duplicateError.code === 404 || duplicateError.status === 404) {
+          throw new GoogleSheetsError(
+            `スプレッドシート(ID: ${spreadsheetId})またはテンプレートシート(ID: ${sourceSheetId})が見つかりません。`,
+            duplicateError,
+            GoogleSheetsErrorCode.TEMPLATE_NOT_FOUND
+          );
         }
+        
         throw duplicateError;
       }
 
@@ -432,19 +476,28 @@ class GoogleSheetsClient {
 
   async exportToPdf(sheetId: string): Promise<string> {
     try {
-      const drive = google.drive({ version: 'v3', auth: this.auth });
-      const response = await drive.files.export({
-        fileId: sheetId,
-        mimeType: 'application/pdf'
-      });
+      const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+      if (!spreadsheetId) {
+        throw new GoogleSheetsError('スプレッドシートIDが設定されていません', undefined, GoogleSheetsErrorCode.UNKNOWN_ERROR);
+      }
 
-      // PDFのURLを返す（実際の実装では、ファイルをアップロードして永続的なURLを返す）
-      return `https://drive.google.com/file/d/${sheetId}/export?format=pdf`;
+      console.log('📕 Exporting PDF for sheet:', { spreadsheetId, sheetId });
+
+      // Google SheetsのPDFエクスポートURL（直接アクセス可能）
+      const pdfUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=pdf&gid=${sheetId}`;
+
+      console.log('✅ PDF URL generated:', pdfUrl);
+      return pdfUrl;
     } catch (error) {
+      console.error('❌ PDF export error:', error);
       if (error instanceof GoogleSheetsError) {
         throw error;
       }
-      this.handleGoogleAPIError(error, 'exportToPdf');
+      throw new GoogleSheetsError(
+        'PDFエクスポートに失敗しました',
+        error instanceof Error ? error : undefined,
+        GoogleSheetsErrorCode.UNKNOWN_ERROR
+      );
     }
   }
 }
