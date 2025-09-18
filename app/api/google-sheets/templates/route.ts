@@ -106,125 +106,157 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
       }
 
+      // 既存シートを確認
+      const sheetsList = await sheets.spreadsheets.get({
+        spreadsheetId: spreadsheetId
+      });
+
+      const existingSheets = sheetsList.data.sheets?.map(s => s.properties?.title) || [];
+      console.log('📋 既存シート:', existingSheets);
+
+      let deliverySheetId: number;
+
       // 納品書テンプレート作成
-      console.log('📋 納品書テンプレート作成中...');
-      const deliverySheetResponse = await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: spreadsheetId,
-        requestBody: {
-          requests: [{
-            addSheet: {
-              properties: {
-                title: '納品書テンプレート',
-                gridProperties: {
-                  rowCount: 50,
-                  columnCount: 10
+      if (existingSheets.includes('納品書テンプレート')) {
+        console.log('📋 納品書テンプレートは既に存在します');
+        const deliverySheet = sheetsList.data.sheets?.find(s => s.properties?.title === '納品書テンプレート');
+        deliverySheetId = deliverySheet?.properties?.sheetId || 0;
+      } else {
+        console.log('📋 納品書テンプレート作成中...');
+        const deliverySheetResponse = await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: spreadsheetId,
+          requestBody: {
+            requests: [{
+              addSheet: {
+                properties: {
+                  title: '納品書テンプレート',
+                  gridProperties: {
+                    rowCount: 50,
+                    columnCount: 10
+                  }
                 }
               }
-            }
-          }]
-        }
-      });
+            }]
+          }
+        });
 
-      const deliverySheetId = deliverySheetResponse.data.replies![0].addSheet!.properties!.sheetId!;
+        deliverySheetId = deliverySheetResponse.data.replies![0].addSheet!.properties!.sheetId!;
+        console.log(`✅ 納品書テンプレート作成完了 (ID: ${deliverySheetId})`);
+      }
 
-      // 納品書テンプレートデータ設定
-      const deliveryTemplateData = [
-        ['', 'BONICA農産物管理システム'],
-        ['', '納品書'],
-        ['納品書番号:', ''],
-        ['納品日:', ''],
-        ['お客様:', ''],
-        ['住所:', ''],
-        [''],
-        ['', '', '', ''],
-        ['', '商品明細', '', ''],
-        ['商品名', '数量', '単価', '金額'],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        [''],
-        ['', '', '合計', ''],
-        [''],
-        ['備考:', '']
-      ];
+      // 納品書テンプレートデータ設定（新規作成時のみ）
+      if (!existingSheets.includes('納品書テンプレート')) {
+        const deliveryTemplateData = [
+          ['', 'BONICA農産物管理システム'],
+          ['', '納品書'],
+          ['納品書番号:', ''],
+          ['納品日:', ''],
+          ['お客様:', ''],
+          ['住所:', ''],
+          [''],
+          ['', '', '', ''],
+          ['', '商品明細', '', ''],
+          ['商品名', '数量', '単価', '金額'],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          [''],
+          ['', '', '合計', ''],
+          [''],
+          ['備考:', '']
+        ];
 
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: spreadsheetId,
-        range: `納品書テンプレート!A1:D24`,
-        valueInputOption: 'RAW',
-        requestBody: {
-          values: deliveryTemplateData
-        }
-      });
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: spreadsheetId,
+          range: `納品書テンプレート!A1:D24`,
+          valueInputOption: 'RAW',
+          requestBody: {
+            values: deliveryTemplateData
+          }
+        });
+        console.log('✅ 納品書テンプレートデータ設定完了');
+      }
+
+      let invoiceSheetId: number;
 
       // 請求書テンプレート作成
-      console.log('💰 請求書テンプレート作成中...');
-      const invoiceSheetResponse = await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: spreadsheetId,
-        requestBody: {
-          requests: [{
-            addSheet: {
-              properties: {
-                title: '請求書テンプレート',
-                gridProperties: {
-                  rowCount: 50,
-                  columnCount: 10
+      if (existingSheets.includes('請求書テンプレート')) {
+        console.log('💰 請求書テンプレートは既に存在します');
+        const invoiceSheet = sheetsList.data.sheets?.find(s => s.properties?.title === '請求書テンプレート');
+        invoiceSheetId = invoiceSheet?.properties?.sheetId || 0;
+      } else {
+        console.log('💰 請求書テンプレート作成中...');
+        const invoiceSheetResponse = await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: spreadsheetId,
+          requestBody: {
+            requests: [{
+              addSheet: {
+                properties: {
+                  title: '請求書テンプレート',
+                  gridProperties: {
+                    rowCount: 50,
+                    columnCount: 10
+                  }
                 }
               }
-            }
-          }]
-        }
-      });
+            }]
+          }
+        });
 
-      const invoiceSheetId = invoiceSheetResponse.data.replies![0].addSheet!.properties!.sheetId!;
+        invoiceSheetId = invoiceSheetResponse.data.replies![0].addSheet!.properties!.sheetId!;
+        console.log(`✅ 請求書テンプレート作成完了 (ID: ${invoiceSheetId})`);
+      }
 
-      // 請求書テンプレートデータ設定
-      const invoiceTemplateData = [
-        ['', 'BONICA農産物管理システム'],
-        ['', '請求書'],
-        ['請求書番号:', ''],
-        ['請求日:', ''],
-        ['支払期限:', ''],
-        ['お客様:', ''],
-        ['住所:', ''],
-        ['請求先住所:', ''],
-        [''],
-        ['', '', '', ''],
-        ['', '請求明細', '', ''],
-        ['項目', '数量', '単価', '金額'],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        ['', '', '', ''],
-        [''],
-        ['', '', '小計', ''],
-        ['', '', '消費税', ''],
-        ['', '', '合計', ''],
-        [''],
-        ['備考:', '']
-      ];
+      // 請求書テンプレートデータ設定（新規作成時のみ）
+      if (!existingSheets.includes('請求書テンプレート')) {
+        const invoiceTemplateData = [
+          ['', 'BONICA農産物管理システム'],
+          ['', '請求書'],
+          ['請求書番号:', ''],
+          ['請求日:', ''],
+          ['支払期限:', ''],
+          ['お客様:', ''],
+          ['住所:', ''],
+          ['請求先住所:', ''],
+          [''],
+          ['', '', '', ''],
+          ['', '請求明細', '', ''],
+          ['項目', '数量', '単価', '金額'],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          ['', '', '', ''],
+          [''],
+          ['', '', '小計', ''],
+          ['', '', '消費税', ''],
+          ['', '', '合計', ''],
+          [''],
+          ['備考:', '']
+        ];
 
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: spreadsheetId,
-        range: `請求書テンプレート!A1:D28`,
-        valueInputOption: 'RAW',
-        requestBody: {
-          values: invoiceTemplateData
-        }
-      });
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: spreadsheetId,
+          range: `請求書テンプレート!A1:D28`,
+          valueInputOption: 'RAW',
+          requestBody: {
+            values: invoiceTemplateData
+          }
+        });
+        console.log('✅ 請求書テンプレートデータ設定完了');
+      }
 
       console.log('✅ Google Sheetsテンプレート作成完了');
 
