@@ -125,7 +125,19 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // 関連する納品データの処理は deliveryIds フィールドで管理
+    // 関連する納品データのステータスを更新（請求済みに変更）
+    await prisma.delivery.updateMany({
+      where: {
+        id: {
+          in: deliveries.map(d => d.id)
+        }
+      },
+      data: {
+        status: 'INVOICED'
+      }
+    });
+
+    console.log(`✅ Updated ${deliveries.length} deliveries to INVOICED status`);
 
     return NextResponse.json({
       success: true,

@@ -72,16 +72,17 @@ export async function POST(request: NextRequest) {
     const result = await googleSheetsClient.createDeliverySheet(deliveryData, templateId);
     console.log('✅ Delivery sheet created:', result);
 
-    // データベースを更新
+    // データベースを更新（ステータスも更新）
     await prisma.delivery.update({
       where: { id: deliveryId },
       data: {
         googleSheetId: result.sheetId,
-        googleSheetUrl: result.url
+        googleSheetUrl: result.url,
+        status: 'DELIVERED' // Google Sheets納品書作成完了でDELIVEREDステータスに
       }
     });
 
-    console.log('✅ Database updated with sheet info');
+    console.log('✅ Database updated with sheet info and status changed to DELIVERED');
 
     return NextResponse.json({
       success: true,
