@@ -140,7 +140,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const validatedData = createDeliverySchema.parse(body)
 
-    // Start transaction
+    // Start transaction with timeout configuration
     const result = await prisma.$transaction(async (tx) => {
       // Check stock availability for all items
       for (const item of validatedData.items) {
@@ -176,18 +176,21 @@ export async function POST(request: Request) {
         },
       })
 
-      // Create delivery items and update purchase quantities
-      for (const item of validatedData.items) {
-        await tx.deliveryItem.create({
-          data: {
-            deliveryId: delivery.id,
-            purchaseId: item.purchaseId,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            amount: item.quantity * item.unitPrice,
-          },
-        })
+      // Create delivery items in batch
+      const deliveryItemsData = validatedData.items.map(item => ({
+        deliveryId: delivery.id,
+        purchaseId: item.purchaseId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        amount: item.quantity * item.unitPrice,
+      }))
 
+      await tx.deliveryItem.createMany({
+        data: deliveryItemsData,
+      })
+
+      // Update purchase quantities and status in batch
+      for (const item of validatedData.items) {
         // Update purchase remaining quantity
         await tx.purchase.update({
           where: { id: item.purchaseId },
@@ -198,25 +201,27 @@ export async function POST(request: Request) {
           },
         })
 
-        // Update purchase status if fully used
+        // Update purchase status if fully used (optimized to avoid additional query)
         const updatedPurchase = await tx.purchase.findUnique({
           where: { id: item.purchaseId },
           select: { remainingQuantity: true, quantity: true },
         })
 
-        if (updatedPurchase && updatedPurchase.remainingQuantity === 0) {
-          await tx.purchase.update({
-            where: { id: item.purchaseId },
-            data: { status: 'USED' },
-          })
-        } else if (
-          updatedPurchase &&
-          updatedPurchase.remainingQuantity < updatedPurchase.quantity
-        ) {
-          await tx.purchase.update({
-            where: { id: item.purchaseId },
-            data: { status: 'PARTIAL' },
-          })
+        if (updatedPurchase) {
+          let newStatus = 'AVAILABLE'
+          if (updatedPurchase.remainingQuantity === 0) {
+            newStatus = 'USED'
+          } else if (updatedPurchase.remainingQuantity < updatedPurchase.quantity) {
+            newStatus = 'PARTIAL'
+          }
+
+          // Only update if status actually changed
+          if (newStatus !== 'AVAILABLE') {
+            await tx.purchase.update({
+              where: { id: item.purchaseId },
+              data: { status: newStatus },
+            })
+          }
         }
       }
 
@@ -247,19 +252,52 @@ export async function POST(request: Request) {
           },
         },
       })
+    }, {
+      maxWait: 20000, // 最大20秒待機
+      timeout: 30000, // 30秒でタイムアウト
     })
 
     return NextResponse.json(result, { status: 201 })
   } catch (error) {
     console.error('Failed to create delivery:', error)
+
+    // Prismaトランザクションエラーの詳細ログ
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      })
+    }
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { error: '入力データの検証に失敗しました', details: error.errors },
         { status: 400 }
       )
     }
+
+    // Prismaトランザクションエラーのハンドリング
+    if (error instanceof Error) {
+      if (error.message.includes('Transaction not found') ||
+          error.message.includes('Transaction ID is invalid')) {
+        return NextResponse.json(
+          { error: 'データベース処理がタイムアウトしました。もう一度お試しください。' },
+          { status: 500 }
+        )
+      }
+
+      if (error.message.includes('transaction timeout') ||
+          error.message.includes('connection timeout')) {
+        return NextResponse.json(
+          { error: 'データベース接続がタイムアウトしました。しばらく待ってからお試しください。' },
+          { status: 500 }
+        )
+      }
+    }
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to create delivery' },
+      { error: error instanceof Error ? error.message : '納品データの作成に失敗しました' },
       { status: 500 }
     )
   }

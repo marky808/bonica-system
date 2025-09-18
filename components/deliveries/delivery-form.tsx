@@ -22,6 +22,12 @@ const deliverySchema = z.object({
     quantity: z.number().min(0.01, "数量を入力してください"),
     unitPrice: z.number().min(0, "単価を入力してください"),
   })).min(1, "納品商品を1つ以上選択してください"),
+}).superRefine((data, ctx) => {
+  // 在庫チェック
+  data.items.forEach((item, index) => {
+    // この時点では allPurchases にアクセスできないため、
+    // バリデーションは handleSubmit で実行
+  })
 })
 
 type DeliveryFormData = z.infer<typeof deliverySchema>
@@ -121,6 +127,21 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
   }, [debouncedSearchQuery, allPurchases])
 
   const handleSubmit = (data: DeliveryFormData) => {
+    // 在庫チェック
+    const stockErrors = []
+    for (const [index, item] of data.items.entries()) {
+      const purchase = getPurchaseInfo(item.purchaseId)
+      if (purchase && item.quantity > purchase.remainingQuantity) {
+        stockErrors.push(`商品${index + 1}: ${purchase.productName} の在庫が不足しています。在庫: ${purchase.remainingQuantity}${purchase.unit}, 要求: ${item.quantity}${purchase.unit}`)
+      }
+    }
+
+    if (stockErrors.length > 0) {
+      setError(`在庫不足エラー:\n${stockErrors.join('\n')}`)
+      return
+    }
+
+    setError('')
     onSubmit(data)
   }
 
@@ -446,6 +467,12 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                                     } else {
                                       const numValue = Number.parseFloat(value)
                                       if (!isNaN(numValue)) {
+                                        // 在庫数を超えていないかチェック
+                                        if (numValue > maxQuantity) {
+                                          setError(`在庫数を超えています。最大 ${maxQuantity} ${purchase?.unit || '個'} まで入力可能です。`)
+                                        } else {
+                                          setError('')
+                                        }
                                         field.onChange(numValue)
                                       }
                                     }

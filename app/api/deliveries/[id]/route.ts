@@ -80,7 +80,7 @@ export async function PUT(
     const body = await request.json()
     const validatedData = updateDeliverySchema.parse(body)
 
-    // Start transaction
+    // Start transaction with timeout configuration
     const result = await prisma.$transaction(async (tx) => {
       const existingDelivery = await tx.delivery.findUnique({
         where: { id: params.id },
@@ -232,19 +232,52 @@ export async function PUT(
           },
         },
       })
+    }, {
+      maxWait: 20000, // 最大20秒待機
+      timeout: 30000, // 30秒でタイムアウト
     })
 
     return NextResponse.json(result)
   } catch (error) {
     console.error('Failed to update delivery:', error)
+
+    // Prismaトランザクションエラーの詳細ログ
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      })
+    }
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { error: '入力データの検証に失敗しました', details: error.errors },
         { status: 400 }
       )
     }
+
+    // Prismaトランザクションエラーのハンドリング
+    if (error instanceof Error) {
+      if (error.message.includes('Transaction not found') ||
+          error.message.includes('Transaction ID is invalid')) {
+        return NextResponse.json(
+          { error: 'データベース処理がタイムアウトしました。もう一度お試しください。' },
+          { status: 500 }
+        )
+      }
+
+      if (error.message.includes('transaction timeout') ||
+          error.message.includes('connection timeout')) {
+        return NextResponse.json(
+          { error: 'データベース接続がタイムアウトしました。しばらく待ってからお試しください。' },
+          { status: 500 }
+        )
+      }
+    }
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to update delivery' },
+      { error: error instanceof Error ? error.message : '納品データの更新に失敗しました' },
       { status: 500 }
     )
   }

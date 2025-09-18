@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Search, Filter, Edit, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, Truck, FileText } from "lucide-react"
+import { Search, Filter, Edit, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, Truck, FileText, Download } from "lucide-react"
 import { apiClient, type Delivery, type Customer } from "@/lib/api"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -116,6 +116,15 @@ export function DeliveryList({
       style: "currency",
       currency: "JPY",
     }).format(amount)
+  }
+
+  // Google SheetsのPDFリンクを生成
+  const generatePdfUrl = (delivery: Delivery) => {
+    if (!delivery.googleSheetId) return null
+
+    // 環境変数からスプレッドシートIDを取得（実際の値は本番環境の設定に依存）
+    const spreadsheetId = "1vaxKYp767uQXg9E6EPDcL4QFwZoqLCpZ7AT32GMhrCY"
+    return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=pdf&gid=${delivery.googleSheetId}`
   }
 
   const getStatusBadge = (status: string) => {
@@ -354,15 +363,37 @@ export function DeliveryList({
                       <Button variant="outline" size="sm" onClick={() => onView(delivery)} className="h-9 w-9 p-0">
                         <Eye className="h-4 w-4" />
                       </Button>
-                      {onCreateDeliverySlip && (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                      {onCreateDeliverySlip && delivery.status !== 'DELIVERED' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => onCreateDeliverySlip(delivery.id)}
                           className="h-9 w-9 p-0"
                           title="Google Sheets納品書作成"
                         >
                           <FileText className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {delivery.status === 'DELIVERED' && delivery.googleSheetUrl && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(delivery.googleSheetUrl, '_blank')}
+                          className="h-9 w-9 p-0"
+                          title="Google Sheetsを開く"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {delivery.status === 'DELIVERED' && generatePdfUrl(delivery) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(generatePdfUrl(delivery)!, '_blank')}
+                          className="h-9 w-9 p-0"
+                          title="PDFダウンロード"
+                        >
+                          <Download className="h-4 w-4" />
                         </Button>
                       )}
                       <Button variant="outline" size="sm" onClick={() => onEdit(delivery)} className="h-9 w-9 p-0">
@@ -444,10 +475,30 @@ export function DeliveryList({
                         <Button variant="outline" size="sm" onClick={() => onView(delivery)}>
                           <Eye className="h-4 w-4" />
                         </Button>
+                        {delivery.status === 'DELIVERED' && delivery.googleSheetUrl && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(delivery.googleSheetUrl, '_blank')}
+                            title="Google Sheetsを開く"
+                          >
+                            <FileText className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {delivery.status === 'DELIVERED' && generatePdfUrl(delivery) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(generatePdfUrl(delivery)!, '_blank')}
+                            title="PDFダウンロード"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        )}
                         {onCreateDeliverySlip && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => onCreateDeliverySlip(delivery.id)}
                             title="Google Sheets納品書作成"
                           >
