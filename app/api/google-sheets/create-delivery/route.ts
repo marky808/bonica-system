@@ -64,13 +64,31 @@ export async function POST(request: NextRequest) {
     console.log('🔍 Delivery ID for number generation:', delivery.id);
     console.log('🔍 Existing delivery number:', delivery.deliveryNumber);
 
-    // より安全な納品書番号生成
+    // 安全な納品書番号生成ロジックの改善
     let generatedNumber = 'DEL-UNKNOWN';
-    if (delivery.id && typeof delivery.id === 'string' && delivery.id.length >= 8) {
-      generatedNumber = `DEL-${delivery.id.slice(0, 8)}`;
-    } else if (delivery.id) {
-      generatedNumber = `DEL-${delivery.id}`;
-    } else {
+
+    try {
+      if (delivery.id) {
+        // delivery.idが文字列でも数値でも対応
+        const idString = String(delivery.id);
+        if (idString.length >= 8) {
+          generatedNumber = `DEL-${idString.slice(0, 8)}`;
+        } else {
+          generatedNumber = `DEL-${idString.padStart(8, '0')}`;
+        }
+      } else {
+        // フォールバック: 現在時刻ベースの番号
+        const timestamp = Date.now().toString();
+        generatedNumber = `DEL-${timestamp.slice(-8)}`;
+      }
+
+      console.log('✅ Delivery number generation successful:', {
+        deliveryId: delivery.id,
+        generatedNumber: generatedNumber
+      });
+    } catch (numberError) {
+      console.error('❌ Delivery number generation failed:', numberError);
+      // 最終的なフォールバック
       generatedNumber = `DEL-${Date.now().toString().slice(-8)}`;
     }
 
@@ -164,15 +182,19 @@ export async function POST(request: NextRequest) {
 
     // エラーが発生してもdeliveryのステータスをERRORに更新して追跡可能にする
     try {
-      console.log('🔄 Attempting to update delivery status to ERROR for ID:', deliveryId);
-      const updatedDelivery = await prisma.delivery.update({
-        where: { id: deliveryId },
-        data: {
-          status: 'ERROR',
-          notes: `Google Sheets作成エラー: ${errorDetails || errorMessage}`
-        }
-      });
-      console.log('✅ Delivery status updated to ERROR for tracking:', updatedDelivery.status);
+      if (deliveryId) {
+        console.log('🔄 Attempting to update delivery status to ERROR for ID:', deliveryId);
+        const updatedDelivery = await prisma.delivery.update({
+          where: { id: deliveryId },
+          data: {
+            status: 'ERROR',
+            notes: `Google Sheets作成エラー [${new Date().toISOString()}]: ${errorDetails || errorMessage}`.slice(0, 500) // メモの長さ制限
+          }
+        });
+        console.log('✅ Delivery status updated to ERROR for tracking:', updatedDelivery.status);
+      } else {
+        console.log('⚠️ No deliveryId available for status update');
+      }
     } catch (updateError) {
       console.error('❌ Failed to update delivery status to ERROR:', updateError);
       console.error('❌ Update error details:', JSON.stringify(updateError, null, 2));

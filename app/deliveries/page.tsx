@@ -262,14 +262,19 @@ export default function DeliveriesPage() {
     setSyncingGoogleSheets(true)
     setError('')
     setSuccess('')
-    
+
+    console.log('📊 Starting Google Sheets delivery creation:', { deliveryId, templatesCount: templates.length });
+
     try {
       // 納品書用テンプレートを取得
       const deliveryTemplate = templates.find(t => t.type === 'delivery')
       if (!deliveryTemplate) {
-        setError('納品書用のGoogle Sheetsテンプレートが見つかりません')
+        console.error('❌ No delivery template found:', { templates });
+        setError('納品書用のGoogle Sheetsテンプレートが見つかりません。テンプレート作成ボタンでテンプレートを作成してください。')
         return
       }
+
+      console.log('✅ Delivery template found:', deliveryTemplate);
       
       const response = await fetch('/api/google-sheets/create-delivery', {
         method: 'POST',
@@ -285,25 +290,42 @@ export default function DeliveriesPage() {
       const result = await response.json()
       
       if (result.success) {
+        console.log('✅ Google Sheets delivery creation successful:', result);
         setSuccess(`Google Sheets納品書を作成しました: ${result.url}`)
-        
-        // 納品リストを更新
-        const deliveriesRes = await apiClient.getDeliveries()
-        if (deliveriesRes.data) {
-          setDeliveries(deliveriesRes.data.deliveries)
+
+        // 納品リストを更新（エラーハンドリング付き）
+        try {
+          const deliveriesRes = await apiClient.getDeliveries()
+          if (deliveriesRes.data) {
+            setDeliveries(deliveriesRes.data.deliveries)
+            console.log('✅ Deliveries list updated successfully');
+          }
+        } catch (refreshError) {
+          console.error('❌ Failed to refresh deliveries list:', refreshError);
+          // リスト更新失敗でもメインの成功メッセージは保持
         }
       } else {
+        console.error('❌ Google Sheets delivery creation failed:', result);
         // エラーメッセージをユーザーフレンドリーに
         let errorMessage = result.error || 'Google Sheets納品書の作成に失敗しました'
-        if (errorMessage.includes('DECODER routines')) {
-          errorMessage = 'Google Sheets APIの認証に失敗しました。システム管理者にお問い合わせください。'
+
+        // エラー種別によるユーザーフレンドリーメッセージ
+        if (errorMessage.includes('DECODER routines') || errorMessage.includes('JWT')) {
+          errorMessage = 'Google Sheets APIの認証に失敗しました。環境変数の設定を確認してください。'
         } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-          errorMessage = 'Google Sheets APIへのアクセス権限がありません。システム管理者にお問い合わせください。'
+          errorMessage = 'Google Sheets APIへのアクセス権限がありません。サービスアカウントの設定を確認してください。'
+        } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+          errorMessage = 'Google Sheetsテンプレートにアクセスできません。テンプレートの共有設定を確認してください。'
+        } else if (errorMessage.includes('404') || errorMessage.includes('テンプレートが見つかりません')) {
+          errorMessage = 'テンプレートシートが見つかりません。テンプレート作成ボタンでテンプレートを作成してください。'
+        } else if (errorMessage.includes('network') || errorMessage.includes('timeout')) {
+          errorMessage = 'ネットワークエラーが発生しました。インターネット接続を確認して再試行してください。'
         }
         setError(errorMessage)
       }
     } catch (err) {
-      setError('Google Sheets納品書作成でエラーが発生しました')
+      console.error('❌ Unexpected error in handleCreateGoogleSheetsDelivery:', err);
+      setError(`Google Sheets納品書作成でエラーが発生しました: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSyncingGoogleSheets(false)
     }

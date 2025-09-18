@@ -44,9 +44,24 @@ export async function GET(request: NextRequest) {
 
         console.log('📋 Available sheets:', availableSheets);
 
-        // テンプレートシートを探す
-        const deliverySheet = availableSheets.find(s => s.title?.includes('納品書'));
-        const invoiceSheet = availableSheets.find(s => s.title?.includes('請求書'));
+        // テンプレートシートを探す（より厳密なマッチング）
+        const deliverySheet = availableSheets.find(s => {
+          const title = s.title?.toLowerCase() || '';
+          return title.includes('納品書テンプレート') ||
+                 (title.includes('納品書') && title.includes('テンプレート'));
+        });
+        const invoiceSheet = availableSheets.find(s => {
+          const title = s.title?.toLowerCase() || '';
+          return title.includes('請求書テンプレート') ||
+                 (title.includes('請求書') && title.includes('テンプレート'));
+        });
+
+        console.log('🔍 Template sheet search results:', {
+          deliveryFound: !!deliverySheet,
+          deliveryTitle: deliverySheet?.title,
+          invoiceFound: !!invoiceSheet,
+          invoiceTitle: invoiceSheet?.title
+        });
 
         if (deliverySheet) {
           templates.push({

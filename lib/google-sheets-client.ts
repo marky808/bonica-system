@@ -158,29 +158,71 @@ class GoogleSheetsClient {
 
       console.log('📊 Creating delivery sheet with:', { spreadsheetId, templateSheetId });
 
+      // テンプレートIDの検証と数値変換
+      let sourceSheetId: number;
+      try {
+        sourceSheetId = parseInt(templateSheetId);
+        if (isNaN(sourceSheetId)) {
+          throw new Error(`Invalid template sheet ID: ${templateSheetId}`);
+        }
+        console.log('✅ Template sheet ID validated:', sourceSheetId);
+      } catch (parseError) {
+        console.error('❌ Template sheet ID parsing failed:', parseError);
+        throw new GoogleSheetsError(
+          `テンプレートシートIDが無効です: ${templateSheetId}`,
+          parseError instanceof Error ? parseError : undefined,
+          GoogleSheetsErrorCode.INVALID_DATA
+        );
+      }
+
       // 新しいシートを作成（テンプレートシートを複製）
       const newSheetName = `納品書_${data.delivery_number}_${data.customer_name}_${new Date().toISOString().slice(0, 10)}`;
-      
-      console.log('📋 Duplicating sheet:', { sourceSheetId: templateSheetId, newSheetName });
-      
-      const batchUpdateResponse = await this.sheets.spreadsheets.batchUpdate({
-        spreadsheetId: spreadsheetId,
-        requestBody: {
-          requests: [{
-            duplicateSheet: {
-              sourceSheetId: parseInt(templateSheetId),
-              newSheetName: newSheetName
-            }
-          }]
+
+      console.log('📋 Duplicating sheet:', { sourceSheetId, newSheetName });
+
+      let batchUpdateResponse;
+      try {
+        batchUpdateResponse = await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: spreadsheetId,
+          requestBody: {
+            requests: [{
+              duplicateSheet: {
+                sourceSheetId: sourceSheetId,
+                newSheetName: newSheetName
+              }
+            }]
+          }
+        });
+      } catch (duplicateError: any) {
+        console.error('❌ Sheet duplication failed:', duplicateError);
+        if (duplicateError.message?.includes('Invalid requests[0].duplicateSheet: Source sheet id') ||
+            duplicateError.message?.includes('Unable to parse range')) {
+          throw new GoogleSheetsError(
+            `テンプレートシート(ID: ${sourceSheetId})が見つかりません。テンプレート設定を確認してください。`,
+            duplicateError,
+            GoogleSheetsErrorCode.TEMPLATE_NOT_FOUND
+          );
         }
-      });
+        throw duplicateError;
+      }
 
       const newSheetId = batchUpdateResponse.data.replies![0].duplicateSheet!.properties!.sheetId!.toString();
       
       console.log('✅ Sheet duplicated successfully:', { newSheetId, newSheetName });
 
       // データを更新（シート名を使用）
-      await this.updateDeliverySheet(spreadsheetId, newSheetName, data);
+      try {
+        await this.updateDeliverySheet(spreadsheetId, newSheetName, data);
+        console.log('✅ Sheet data updated successfully');
+      } catch (updateError: any) {
+        console.error('❌ Sheet data update failed:', updateError);
+        // 作成されたシートは残すが、データ更新失敗として処理
+        throw new GoogleSheetsError(
+          'Google Sheetsは作成されましたが、データの更新に失敗しました。手動でデータを入力してください。',
+          updateError,
+          GoogleSheetsErrorCode.UNKNOWN_ERROR
+        );
+      }
 
       const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${newSheetId}`;
       
