@@ -10,29 +10,99 @@ export async function GET(request: NextRequest) {
     const invoiceSheetId = process.env.GOOGLE_SHEETS_INVOICE_SHEET_ID;
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
 
+    console.log('🔍 Template environment variables:', {
+      deliverySheetId,
+      invoiceSheetId,
+      spreadsheetId
+    });
+
     // テンプレート情報を構築
     const templates = [];
 
-    if (deliverySheetId && spreadsheetId) {
-      templates.push({
-        id: 'delivery-template',
-        name: '納品書テンプレート',
-        type: 'delivery',
-        templateSheetId: deliverySheetId,
-        spreadsheetId: spreadsheetId,
-        url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${deliverySheetId}`
-      });
-    }
+    // 環境変数が設定されていない場合、Google Sheetsから直接取得を試行
+    if (!deliverySheetId && !invoiceSheetId && spreadsheetId) {
+      console.log('🔍 Environment variables not set, attempting to fetch sheet IDs from Google Sheets');
 
-    if (invoiceSheetId && spreadsheetId) {
-      templates.push({
-        id: 'invoice-template',
-        name: '請求書テンプレート',
-        type: 'invoice',
-        templateSheetId: invoiceSheetId,
-        spreadsheetId: spreadsheetId,
-        url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${invoiceSheetId}`
-      });
+      try {
+        const { google } = require('googleapis');
+        const auth = new google.auth.JWT(
+          process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
+          undefined,
+          process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+          ['https://www.googleapis.com/auth/spreadsheets']
+        );
+
+        const sheets = google.sheets({ version: 'v4', auth });
+        const spreadsheet = await sheets.spreadsheets.get({
+          spreadsheetId: spreadsheetId
+        });
+
+        const availableSheets = spreadsheet.data.sheets?.map(sheet => ({
+          id: sheet.properties?.sheetId,
+          title: sheet.properties?.title
+        })) || [];
+
+        console.log('📋 Available sheets:', availableSheets);
+
+        // テンプレートシートを探す
+        const deliverySheet = availableSheets.find(s => s.title?.includes('納品書'));
+        const invoiceSheet = availableSheets.find(s => s.title?.includes('請求書'));
+
+        if (deliverySheet) {
+          templates.push({
+            id: 'delivery-template',
+            name: '納品書テンプレート',
+            type: 'delivery',
+            templateSheetId: deliverySheet.id?.toString() || '',
+            spreadsheetId: spreadsheetId,
+            url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${deliverySheet.id}`
+          });
+        }
+
+        if (invoiceSheet) {
+          templates.push({
+            id: 'invoice-template',
+            name: '請求書テンプレート',
+            type: 'invoice',
+            templateSheetId: invoiceSheet.id?.toString() || '',
+            spreadsheetId: spreadsheetId,
+            url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${invoiceSheet.id}`
+          });
+        }
+
+        console.log('✅ Templates found:', templates);
+
+      } catch (error) {
+        console.error('❌ Failed to fetch sheets from Google Sheets:', error);
+        return NextResponse.json({
+          error: 'テンプレート取得に失敗しました',
+          details: error instanceof Error ? error.message : String(error),
+          availableSheets: []
+        });
+      }
+    } else {
+      // 環境変数が設定されている場合の従来の処理
+      if (deliverySheetId && spreadsheetId) {
+        templates.push({
+          id: 'delivery-template',
+          name: '納品書テンプレート',
+          type: 'delivery',
+          templateSheetId: deliverySheetId,
+          spreadsheetId: spreadsheetId,
+          url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${deliverySheetId}`
+        });
+      }
+
+      if (invoiceSheetId && spreadsheetId) {
+        templates.push({
+          id: 'invoice-template',
+          name: '請求書テンプレート',
+          type: 'invoice',
+          templateSheetId: invoiceSheetId,
+          spreadsheetId: spreadsheetId,
+          url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${invoiceSheetId}`
+        });
+      }
     }
 
     // タイプでフィルタリング
