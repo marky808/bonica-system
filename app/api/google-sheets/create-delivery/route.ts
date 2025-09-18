@@ -43,8 +43,10 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Delivery data retrieved:', {
       id: delivery.id,
+      deliveryNumber: delivery.deliveryNumber,
       customer: delivery.customer?.companyName,
-      itemsCount: delivery.items.length
+      itemsCount: delivery.items.length,
+      status: delivery.status
     });
 
     // Google Sheetsクライアントを取得
@@ -59,8 +61,26 @@ export async function POST(request: NextRequest) {
     console.log('📋 Template validation will be performed during sheet creation');
 
     // 納品書データを準備
+    console.log('🔍 Delivery ID for number generation:', delivery.id);
+    console.log('🔍 Existing delivery number:', delivery.deliveryNumber);
+
+    // より安全な納品書番号生成
+    let generatedNumber = 'DEL-UNKNOWN';
+    if (delivery.id && typeof delivery.id === 'string' && delivery.id.length >= 8) {
+      generatedNumber = `DEL-${delivery.id.slice(0, 8)}`;
+    } else if (delivery.id) {
+      generatedNumber = `DEL-${delivery.id}`;
+    } else {
+      generatedNumber = `DEL-${Date.now().toString().slice(-8)}`;
+    }
+
+    const finalDeliveryNumber = delivery.deliveryNumber || generatedNumber;
+
+    console.log('🔍 Generated number:', generatedNumber);
+    console.log('🔍 Final delivery number:', finalDeliveryNumber);
+
     const deliveryData = {
-      delivery_number: delivery.deliveryNumber || `DEL-${delivery.id.slice(0, 8)}`,
+      delivery_number: finalDeliveryNumber,
       delivery_date: delivery.deliveryDate.toISOString().split('T')[0],
       customer_name: delivery.customer.companyName,
       customer_address: delivery.customer.deliveryAddress,
@@ -82,7 +102,8 @@ export async function POST(request: NextRequest) {
     console.log('✅ Delivery sheet created:', result);
 
     // データベースを更新（ステータスも更新）
-    await prisma.delivery.update({
+    console.log('🔄 Updating delivery status to DELIVERED for ID:', deliveryId);
+    const updatedDelivery = await prisma.delivery.update({
       where: { id: deliveryId },
       data: {
         googleSheetId: result.sheetId,
@@ -91,7 +112,11 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    console.log('✅ Database updated with sheet info and status changed to DELIVERED');
+    console.log('✅ Database updated with sheet info and status changed to DELIVERED:', {
+      id: updatedDelivery.id,
+      status: updatedDelivery.status,
+      googleSheetId: updatedDelivery.googleSheetId
+    });
 
     return NextResponse.json({
       success: true,
@@ -131,16 +156,18 @@ export async function POST(request: NextRequest) {
 
     // エラーが発生してもdeliveryのステータスをERRORに更新して追跡可能にする
     try {
-      await prisma.delivery.update({
+      console.log('🔄 Attempting to update delivery status to ERROR for ID:', deliveryId);
+      const updatedDelivery = await prisma.delivery.update({
         where: { id: deliveryId },
         data: {
           status: 'ERROR',
           notes: `Google Sheets作成エラー: ${errorDetails || errorMessage}`
         }
       });
-      console.log('🔄 Delivery status updated to ERROR for tracking');
+      console.log('✅ Delivery status updated to ERROR for tracking:', updatedDelivery.status);
     } catch (updateError) {
       console.error('❌ Failed to update delivery status to ERROR:', updateError);
+      console.error('❌ Update error details:', JSON.stringify(updateError, null, 2));
     }
 
     return NextResponse.json(
