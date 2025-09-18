@@ -53,6 +53,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, type, templateSheetId, createSheets } = body;
 
+    console.log('🔧 DEBUG: API request body:', JSON.stringify(body));
+    console.log('🔧 DEBUG: createSheets value:', createSheets);
+    console.log('🔧 DEBUG: createSheets === true:', createSheets === true);
+
     // 新機能: 実際のGoogle Sheetsテンプレート作成（優先処理）
     if (createSheets === true) {
       const { google } = require('googleapis');
@@ -301,8 +305,11 @@ export async function POST(request: NextRequest) {
     }
 
 
+    console.log('🔧 DEBUG: No matching condition found');
+    console.log('🔧 DEBUG: name:', name, 'type:', type, 'templateSheetId:', templateSheetId, 'createSheets:', createSheets);
+
     return NextResponse.json(
-      { error: 'Invalid request. Provide either template registration data or set createSheets: true' },
+      { error: 'Name, type, and templateSheetId are required' },
       { status: 400 }
     );
 
