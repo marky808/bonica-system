@@ -7,7 +7,7 @@
 
 import { PrismaClient } from '@prisma/client'
 
-const BASE_URL = 'https://bonica-system2025.vercel.app'
+const BASE_URL = 'https://bonica-system2025-l17c87u1k-808worksjp-gmailcoms-projects.vercel.app'
 
 interface TestResult {
   name: string
@@ -29,14 +29,17 @@ async function testLogin(): Promise<string | null> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: '808works.jp@gmail.com',
-        password: 'bonica2024!'
+        password: '6391'
       })
     })
 
     const result = await response.json()
     const duration = Date.now() - startTime
 
-    if (result.success && result.user) {
+    console.log('Response status:', response.status)
+    console.log('Response result:', result)
+
+    if (result.user && result.token) {
       console.log(`✅ ログイン成功: ${result.user.name}`)
       results.push({
         name: 'Production Login',
@@ -44,7 +47,7 @@ async function testLogin(): Promise<string | null> {
         details: `認証成功: ${result.user.name}`,
         duration
       })
-      return result.token || 'authenticated'
+      return result.token
     } else {
       throw new Error(result.error || 'ログイン失敗')
     }
@@ -123,6 +126,17 @@ async function testCreateDeliverySheet(token: string, deliveryId: string, templa
 
     const result = await response.json()
     const duration = Date.now() - startTime
+
+    console.log('📊 納品書生成 Response status:', response.status)
+    console.log('📊 納品書生成 Response result:', result)
+
+    // デバッグ情報を詳細に出力
+    if (result.debugInfo) {
+      console.log('🔍 デバッグ情報:', result.debugInfo)
+    }
+    if (result.details) {
+      console.log('📋 エラー詳細:', result.details)
+    }
 
     if (result.success) {
       console.log('✅ 納品書生成成功!')
@@ -260,6 +274,59 @@ async function testErrorHandling(token: string): Promise<boolean> {
   }
 }
 
+async function checkAvailableTemplates(token: string): Promise<any[]> {
+  console.log('📋 利用可能なテンプレートを確認中...')
+
+  try {
+    const response = await fetch(`${BASE_URL}/api/google-sheets/templates`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Cookie': `auth-token=${token}`
+      }
+    })
+
+    if (response.ok) {
+      const result = await response.json()
+      console.log('✅ テンプレート取得成功')
+      console.log('📋 利用可能なテンプレート:', result)
+
+      // テンプレートが空でも、既知のテンプレートIDを使用する
+      if (!result.templates || result.templates.length === 0) {
+        console.log('📄 テンプレートが見つからないため、既知のテンプレートIDを使用します')
+        return [{
+          id: 'delivery-template',
+          name: '納品書テンプレート',
+          type: 'delivery',
+          templateSheetId: '1125769553', // 既知の納品書テンプレートID
+          source: 'fallback'
+        }]
+      }
+
+      return result.templates || []
+    } else {
+      console.log('❌ テンプレート取得失敗:', response.status)
+      // APIエラーの場合もフォールバックテンプレートを使用
+      return [{
+        id: 'delivery-template',
+        name: '納品書テンプレート',
+        type: 'delivery',
+        templateSheetId: '1125769553',
+        source: 'fallback-api-error'
+      }]
+    }
+  } catch (error) {
+    console.error('❌ テンプレート確認エラー:', error)
+    // エラーの場合もフォールバックテンプレートを使用
+    return [{
+      id: 'delivery-template',
+      name: '納品書テンプレート',
+      type: 'delivery',
+      templateSheetId: '1125769553',
+      source: 'fallback-error'
+    }]
+  }
+}
+
 async function main() {
   console.log('🚀 本番環境 納品書生成機能テスト開始')
   console.log(`🌐 対象URL: ${BASE_URL}`)
@@ -273,6 +340,10 @@ async function main() {
   }
   console.log('')
 
+  // 1.5. テンプレート確認
+  const templates = await checkAvailableTemplates(token)
+  console.log('')
+
   // 2. 納品データ取得
   const deliveries = await getDeliveries(token)
   if (deliveries.length === 0) {
@@ -281,25 +352,56 @@ async function main() {
   }
   console.log('')
 
-  // 3. 最初の納品データでテスト
-  const testDelivery = deliveries[0]
+  // 3. 正常なステータスの納品データを探す
+  let testDelivery = deliveries.find(d => d.status === 'PENDING' || d.status === 'READY') || deliveries[0]
   console.log(`🎯 テスト対象納品: ${testDelivery.id}`)
   console.log(`   顧客: ${testDelivery.customer?.companyName || '不明'}`)
   console.log(`   金額: ${testDelivery.totalAmount?.toLocaleString() || 0}円`)
   console.log(`   現在ステータス: ${testDelivery.status}`)
   console.log('')
 
-  // 4. 納品書生成テスト
+  // 全ての納品データを表示
+  console.log('📋 利用可能な納品データ:')
+  deliveries.forEach((d, i) => {
+    console.log(`   ${i+1}. ${d.id} - ${d.customer?.companyName || '不明'} - ${d.status} - ${d.totalAmount?.toLocaleString() || 0}円`)
+  })
+  console.log('')
+
+  // 4. Google Sheets API単体テスト（認証確認）
+  console.log('🔍 Google Sheets API認証テスト中...')
+  try {
+    const authTestResponse = await fetch(`${BASE_URL}/api/google-sheets/templates`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Cookie': `auth-token=${token}`
+      }
+    })
+    const authTestResult = await authTestResponse.json()
+    console.log('📋 認証テスト結果:', {
+      status: authTestResponse.status,
+      hasTemplates: authTestResult.templates?.length > 0,
+      error: authTestResult.error,
+      details: authTestResult.details
+    })
+  } catch (authError) {
+    console.error('❌ 認証テストエラー:', authError)
+  }
+  console.log('')
+
+  // 5. 納品書生成テスト（遅延を追加して競合を避ける）
+  console.log('⏳ 3秒待機して競合を避けます...')
+  await new Promise(resolve => setTimeout(resolve, 3000))
+
   const deliverySuccess = await testCreateDeliverySheet(token, testDelivery.id, '1125769553')
   console.log('')
 
-  // 5. ステータス確認
+  // 6. ステータス確認
   if (deliverySuccess) {
     await checkDeliveryStatus(token, testDelivery.id)
     console.log('')
   }
 
-  // 6. エラーハンドリングテスト
+  // 7. エラーハンドリングテスト
   await testErrorHandling(token)
   console.log('')
 
