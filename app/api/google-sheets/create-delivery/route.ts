@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
     ({ deliveryId, templateId } = body);
 
     console.log('📊 Delivery sheet creation request:', { deliveryId, templateId });
+    console.log('🚀 ENHANCED LOGGING VERSION - Debug info enabled');
 
     if (!deliveryId || !templateId) {
       return NextResponse.json(
