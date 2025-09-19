@@ -506,14 +506,29 @@ class GoogleSheetsClient {
 let googleSheetsClient: GoogleSheetsClient | null = null;
 
 export function getGoogleSheetsClient(): GoogleSheetsClient {
+  console.log('🔧 getGoogleSheetsClient called - checking singleton instance');
+
   if (!googleSheetsClient) {
+    console.log('🔧 Creating new GoogleSheetsClient instance');
+
     const config = {
       clientEmail: process.env.GOOGLE_SHEETS_CLIENT_EMAIL!,
       privateKey: process.env.GOOGLE_SHEETS_PRIVATE_KEY!,
       projectId: process.env.GOOGLE_SHEETS_PROJECT_ID!
     };
 
+    console.log('🔧 Environment config check:', {
+      hasClientEmail: !!config.clientEmail,
+      hasPrivateKey: !!config.privateKey,
+      hasProjectId: !!config.projectId,
+      clientEmailLength: config.clientEmail?.length || 0,
+      privateKeyLength: config.privateKey?.length || 0,
+      projectIdLength: config.projectId?.length || 0,
+      privateKeyFormat: config.privateKey?.includes('-----BEGIN PRIVATE KEY-----')
+    });
+
     if (!config.clientEmail || !config.privateKey || !config.projectId) {
+      console.error('❌ Missing Google Sheets environment variables');
       throw new GoogleSheetsError(
         'Google Sheets認証情報が設定されていません。環境変数を確認してください。',
         undefined,
@@ -521,7 +536,16 @@ export function getGoogleSheetsClient(): GoogleSheetsClient {
       );
     }
 
-    googleSheetsClient = new GoogleSheetsClient(config);
+    try {
+      console.log('🔧 Attempting to create GoogleSheetsClient');
+      googleSheetsClient = new GoogleSheetsClient(config);
+      console.log('✅ GoogleSheetsClient created successfully');
+    } catch (error) {
+      console.error('❌ Failed to create GoogleSheetsClient:', error);
+      throw error;
+    }
+  } else {
+    console.log('✅ Reusing existing GoogleSheetsClient instance');
   }
 
   return googleSheetsClient;
