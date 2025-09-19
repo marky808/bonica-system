@@ -49,10 +49,32 @@ export async function POST(request: NextRequest) {
       status: delivery.status
     });
 
-    // Google Sheetsクライアントを取得
+    // Google Sheetsクライアント初期化の詳細ログ
     console.log('🔧 Initializing Google Sheets client...');
-    const googleSheetsClient = getGoogleSheetsClient();
-    console.log('✅ Google Sheets client initialized');
+    console.log('🔍 Environment variables check:', {
+      hasClientEmail: !!process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
+      hasPrivateKey: !!process.env.GOOGLE_SHEETS_PRIVATE_KEY,
+      hasProjectId: !!process.env.GOOGLE_SHEETS_PROJECT_ID,
+      hasSpreadsheetId: !!process.env.GOOGLE_SHEETS_SPREADSHEET_ID,
+      clientEmailLength: process.env.GOOGLE_SHEETS_CLIENT_EMAIL?.length || 0,
+      privateKeyLength: process.env.GOOGLE_SHEETS_PRIVATE_KEY?.length || 0,
+      privateKeyStartsWith: process.env.GOOGLE_SHEETS_PRIVATE_KEY?.substring(0, 50) || '',
+      projectIdValue: process.env.GOOGLE_SHEETS_PROJECT_ID || 'NOT_SET'
+    });
+
+    let googleSheetsClient;
+    try {
+      googleSheetsClient = getGoogleSheetsClient();
+      console.log('✅ Google Sheets client initialized successfully');
+    } catch (initError) {
+      console.error('❌ Google Sheets client initialization failed:', {
+        error: initError,
+        errorName: initError instanceof Error ? initError.name : 'Unknown',
+        errorMessage: initError instanceof Error ? initError.message : String(initError),
+        errorStack: initError instanceof Error ? initError.stack : 'No stack'
+      });
+      throw initError;
+    }
 
     // テンプレートIDのログ出力とテンプレート確認（デバッグ用）
     console.log('🔍 Using templateId:', templateId);
@@ -148,10 +170,31 @@ export async function POST(request: NextRequest) {
 
     console.log('📋 Prepared delivery data:', deliveryData);
 
-    // Google Sheetsに納品書を作成
+    // Google Sheetsに納品書を作成（詳細ログ付き）
     console.log('📊 Creating delivery sheet with templateId:', templateId);
-    const result = await googleSheetsClient.createDeliverySheet(deliveryData, templateId);
-    console.log('✅ Delivery sheet created:', result);
+    console.log('🔍 Delivery data before API call:', JSON.stringify(deliveryData, null, 2));
+
+    let result;
+    try {
+      result = await googleSheetsClient.createDeliverySheet(deliveryData, templateId);
+      console.log('✅ Delivery sheet created successfully:', result);
+      console.log('🔍 Full result object:', JSON.stringify(result, null, 2));
+    } catch (sheetsError) {
+      console.error('❌ Google Sheets API call failed:', {
+        error: sheetsError,
+        errorName: sheetsError instanceof Error ? sheetsError.name : 'Unknown',
+        errorMessage: sheetsError instanceof Error ? sheetsError.message : String(sheetsError),
+        errorStack: sheetsError instanceof Error ? sheetsError.stack : 'No stack',
+        deliveryId: deliveryId,
+        templateId: templateId,
+        deliveryDataSnapshot: {
+          delivery_number: deliveryData.delivery_number,
+          customer_name: deliveryData.customer_name,
+          itemsCount: deliveryData.items.length
+        }
+      });
+      throw sheetsError;
+    }
 
     // データベースを更新（ステータスも更新）
     console.log('🔄 Updating delivery status to DELIVERED for ID:', deliveryId);
@@ -206,6 +249,19 @@ export async function POST(request: NextRequest) {
     console.error('❌ Error message:', error instanceof Error ? error.message : String(error));
     console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack');
     console.error('❌ Full error object:', JSON.stringify(error, null, 2));
+    console.error('❌ Error stringified:', String(error));
+    console.error('❌ Error type:', typeof error);
+    console.error('❌ Error constructor:', error?.constructor?.name);
+
+    // 環境変数の最終確認
+    console.error('🔍 Final environment check at error:', {
+      hasClientEmail: !!process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
+      hasPrivateKey: !!process.env.GOOGLE_SHEETS_PRIVATE_KEY,
+      hasProjectId: !!process.env.GOOGLE_SHEETS_PROJECT_ID,
+      hasSpreadsheetId: !!process.env.GOOGLE_SHEETS_SPREADSHEET_ID,
+      privateKeyFormat: process.env.GOOGLE_SHEETS_PRIVATE_KEY?.includes('-----BEGIN PRIVATE KEY-----'),
+      privateKeyLength: process.env.GOOGLE_SHEETS_PRIVATE_KEY?.length
+    });
 
     // デバッグ用：実際のエラー詳細を返す
     let errorMessage = 'Google Sheets納品書の作成に失敗しました';
@@ -260,7 +316,14 @@ export async function POST(request: NextRequest) {
         debugInfo: {
           errorType: error instanceof Error ? error.constructor.name : typeof error,
           errorMessage: error instanceof Error ? error.message : String(error),
-          timestamp: new Date().toISOString()
+          errorStack: error instanceof Error ? error.stack : 'No stack',
+          timestamp: new Date().toISOString(),
+          environmentCheck: {
+            hasClientEmail: !!process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
+            hasPrivateKey: !!process.env.GOOGLE_SHEETS_PRIVATE_KEY,
+            hasProjectId: !!process.env.GOOGLE_SHEETS_PROJECT_ID,
+            hasSpreadsheetId: !!process.env.GOOGLE_SHEETS_SPREADSHEET_ID
+          }
         }
       },
       { status: 500 }
