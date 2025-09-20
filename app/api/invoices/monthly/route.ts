@@ -3,6 +3,8 @@ import { requireAuth } from '@/lib/auth'
 import { freeeClient } from '@/lib/freee-client'
 import { prisma } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 interface MonthlyInvoiceRequest {
   customerId: string
   year: number

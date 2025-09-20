@@ -30,135 +30,128 @@ model Category {
 }
 
 model Supplier {
-  id                  String     @id @default(cuid())
-  companyName         String     @unique
-  contactPerson       String
-  phone               String
-  address             String
-  paymentTerms        String
-  deliveryConditions  String
-  specialNotes        String?
-  createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
-  purchases           Purchase[]
+  id                 String     @id @default(cuid())
+  companyName        String     @unique
+  contactPerson      String
+  phone              String
+  address            String
+  paymentTerms       String
+  deliveryConditions String
+  specialNotes       String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  purchases          Purchase[]
 
   @@map("suppliers")
 }
 
 model Customer {
-  id                      String     @id @default(cuid())
-  companyName             String     @unique
-  contactPerson           String
-  phone                   String
-  deliveryAddress         String
-  billingAddress          String
-  deliveryTimePreference  String?
-  specialRequests         String?
-  specialNotes            String?
-  billingCycle            String     @default("monthly")  // monthly/weekly/immediate
-  billingDay              Int        @default(31)         // 締め日 (1-31, 31は月末)
-  paymentTerms            String     @default("30days")   // 支払条件
-  createdAt               DateTime   @default(now())
-  updatedAt               DateTime   @updatedAt
-  deliveries              Delivery[]
-
-  // Google Sheets APIで使用するエイリアス
-  name                    String     @default("") // 別名：companyName
-  address                 String     @default("") // 別名：deliveryAddress
+  id                     String     @id @default(cuid())
+  companyName            String     @unique
+  contactPerson          String
+  phone                  String
+  deliveryAddress        String
+  billingAddress         String
+  deliveryTimePreference String?
+  specialRequests        String?
+  specialNotes           String?
+  billingCycle           String     @default("monthly")
+  billingDay             Int        @default(31)
+  paymentTerms           String     @default("30days")
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+  name                   String     @default("")
+  address                String     @default("")
+  deliveries             Delivery[]
 
   @@map("customers")
 }
 
 model Purchase {
-  id                String            @id @default(cuid())
+  id                String         @id @default(cuid())
   productName       String
   categoryId        String
   quantity          Float
   unit              String
   unitNote          String?
-  unitPrice         Float             @default(0)
+  unitPrice         Float          @default(0)
   price             Float
-  taxType           String            @default("TAXABLE")
+  taxType           String         @default("TAXABLE")
   supplierId        String
   purchaseDate      DateTime
   expiryDate        DateTime?
   deliveryFee       String?
-  status            String            @default("UNUSED")
+  status            String         @default("UNUSED")
   remainingQuantity Float
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-
-  category     Category       @relation(fields: [categoryId], references: [id])
-  supplier     Supplier       @relation(fields: [supplierId], references: [id])
-  deliveryItems DeliveryItem[]
-
-  // Google Sheets APIで使用するエイリアス  
-  name              String            @default("") // 別名：productName
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  name              String         @default("")
+  deliveryItems     DeliveryItem[]
+  supplier          Supplier       @relation(fields: [supplierId], references: [id])
+  category          Category       @relation(fields: [categoryId], references: [id])
 
   @@map("purchases")
 }
 
 model Delivery {
-  id                   String          @id @default(cuid())
-  deliveryNumber       String?         @unique @map("delivery_number")
-  customerId           String
-  deliveryDate         DateTime
-  totalAmount          Float
-  status               String          @default("PENDING")
-  notes                String?
-  freeeDeliverySlipId  String?
-  freeeInvoiceId       String?
-  googleSheetId        String?
-  googleSheetUrl       String?
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
-
-  customer Customer        @relation(fields: [customerId], references: [id])
-  items    DeliveryItem[]
+  id                  String         @id @default(cuid())
+  customerId          String
+  deliveryDate        DateTime
+  totalAmount         Float
+  status              String         @default("PENDING")
+  freeeDeliverySlipId String?
+  freeeInvoiceId      String?
+  googleSheetId       String?
+  googleSheetUrl      String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  deliveryNumber      String?        @unique @map("delivery_number")
+  notes               String?
+  customer            Customer       @relation(fields: [customerId], references: [id])
+  items               DeliveryItem[]
 
   @@map("deliveries")
 }
 
 model DeliveryItem {
-  id         String  @id @default(cuid())
+  id         String   @id @default(cuid())
   deliveryId String
   purchaseId String
   quantity   Float
   unitPrice  Float
   amount     Float
-
-  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
-  purchase Purchase @relation(fields: [purchaseId], references: [id])
+  purchase   Purchase @relation(fields: [purchaseId], references: [id])
+  delivery   Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
 
   @@map("delivery_items")
 }
 
 model Invoice {
-  id              String        @id @default(cuid())
-  invoice_number  String        @unique
-  customerId      String
-  invoiceDate     DateTime
-  month           Int
-  year            Int
-  totalAmount     Float
-  status          String        @default("DRAFT")
-  freeeInvoiceId  String?
-  googleSheetId   String?
-  googleSheetUrl  String?
-  deliveryIds     String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id             String   @id @default(cuid())
+  invoice_number String   @unique
+  customerId     String
+  invoiceDate    DateTime
+  month          Int
+  year           Int
+  totalAmount    Float
+  status         String   @default("DRAFT")
+  freeeInvoiceId String?
+  googleSheetId  String?
+  googleSheetUrl String?
+  deliveryIds    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@map("invoices")
 }
 
 model GoogleSheetTemplate {
-  id               String   @id @default(cuid())
-  name             String
-  type             String   // 'delivery' or 'invoice'
-  templateSheetId  String
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  type            String
+  templateSheetId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@map("google_sheet_templates")
 }
