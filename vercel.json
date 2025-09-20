@@ -1,7 +1,4 @@
 {
-  "buildCommand": "cp prisma/schema-production.prisma prisma/schema.prisma && npm run vercel-build",
-  "devCommand": "npm run dev",
-  "installCommand": "npm install",
   "framework": "nextjs",
   "functions": {
     "app/api/*/route.ts": {
