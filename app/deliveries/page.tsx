@@ -43,10 +43,15 @@ export default function DeliveriesPage() {
     try {
       const response = await apiClient.getGoogleSheetTemplates()
       if (response.data) {
-        setTemplates(response.data)
+        // APIレスポンスが { templates: [...] } 形式なので、templatesプロパティを取得
+        const templatesData = Array.isArray(response.data) ? response.data : response.data.templates || []
+        setTemplates(Array.isArray(templatesData) ? templatesData : [])
+      } else {
+        setTemplates([])
       }
     } catch (err) {
       console.error('Failed to load templates:', err)
+      setTemplates([])
     }
   }
 
@@ -91,7 +96,7 @@ export default function DeliveriesPage() {
 
   const handleDelete = async (id: string) => {
     // 該当の納品データを取得して詳細情報を表示
-    const delivery = deliveries.find(d => d.id === id)
+    const delivery = Array.isArray(deliveries) ? deliveries.find(d => d.id === id) : null
     if (!delivery) return
     
     let confirmMessage = `【納品データ削除確認】\n\n`
@@ -211,14 +216,14 @@ export default function DeliveriesPage() {
     
     try {
       // 請求書用テンプレートを取得
-      const invoiceTemplate = templates.find(t => t.type === 'invoice')
+      const invoiceTemplate = Array.isArray(templates) ? templates.find(t => t.type === 'invoice') : null
       if (!invoiceTemplate) {
         setError('請求書用のGoogle Sheetsテンプレートが見つかりません')
         return
       }
       
       // 最初の納品データから顧客IDを取得
-      const firstDelivery = deliveries.find(d => selectedDeliveryIds.includes(d.id))
+      const firstDelivery = Array.isArray(deliveries) ? deliveries.find(d => selectedDeliveryIds.includes(d.id)) : null
       if (!firstDelivery) {
         setError('選択した納品データが見つかりません')
         return
@@ -266,24 +271,16 @@ export default function DeliveriesPage() {
     console.log('📊 Starting Google Sheets delivery creation:', { deliveryId, templatesCount: templates.length });
 
     try {
-      // 納品書用テンプレートを取得
-      const deliveryTemplate = templates.find(t => t.type === 'delivery')
-      if (!deliveryTemplate) {
-        console.error('❌ No delivery template found:', { templates });
-        setError('納品書用のGoogle Sheetsテンプレートが見つかりません。テンプレート作成ボタンでテンプレートを作成してください。')
-        return
-      }
+      console.log('✅ Using automatic template detection (templateId will be fetched from database)');
 
-      console.log('✅ Delivery template found:', deliveryTemplate);
-      
       const response = await fetch('/api/google-sheets/create-delivery', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          deliveryId,
-          templateId: deliveryTemplate.templateSheetId
+          deliveryId
+          // templateIdは省略 - APIで自動取得
         })
       })
       
