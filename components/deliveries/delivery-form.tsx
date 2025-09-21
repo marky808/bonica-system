@@ -89,19 +89,28 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
           apiClient.getAvailablePurchases()
         ])
         
-        if (customersRes.data) {
+        if (customersRes.data && Array.isArray(customersRes.data)) {
           setCustomers(customersRes.data)
         } else {
+          console.error('顧客データが配列ではありません:', customersRes.data)
+          setCustomers([])
           setError('お客様データの読み込みに失敗しました')
         }
         
-        if (purchasesRes.data) {
+        if (purchasesRes.data && Array.isArray(purchasesRes.data)) {
           setAllPurchases(purchasesRes.data)
           setAvailablePurchases(purchasesRes.data)
         } else {
+          console.error('購入データが配列ではありません:', purchasesRes.data)
+          setAllPurchases([])
+          setAvailablePurchases([])
           setError('在庫データの読み込みに失敗しました')
         }
       } catch (err) {
+        console.error('データ読み込みエラー:', err)
+        setCustomers([])
+        setAllPurchases([])
+        setAvailablePurchases([])
         setError('データの読み込みに失敗しました')
       } finally {
         setLoading(false)
@@ -113,16 +122,17 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
 
   useEffect(() => {
     if (!debouncedSearchQuery) {
-      setAvailablePurchases(allPurchases)
+      setAvailablePurchases(Array.isArray(allPurchases) ? allPurchases : [])
       return
     }
-    
-    const filtered = allPurchases.filter(purchase => 
+
+    const allPurchasesArray = Array.isArray(allPurchases) ? allPurchases : []
+    const filtered = allPurchasesArray.filter(purchase =>
       purchase.productName.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
       purchase.category?.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
       purchase.supplier?.companyName.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
     )
-    
+
     setAvailablePurchases(filtered)
   }, [debouncedSearchQuery, allPurchases])
 
@@ -173,7 +183,11 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
   }
 
   const getPurchaseInfo = (purchaseId: string) => {
-    return allPurchases.find(p => p.id === purchaseId) || availablePurchases.find(p => p.id === purchaseId)
+    // 配列が正しく初期化されているかチェック
+    const allPurchasesArray = Array.isArray(allPurchases) ? allPurchases : []
+    const availablePurchasesArray = Array.isArray(availablePurchases) ? availablePurchases : []
+
+    return allPurchasesArray.find(p => p.id === purchaseId) || availablePurchasesArray.find(p => p.id === purchaseId)
   }
 
   const getMaxQuantity = (purchaseId: string) => {
@@ -224,7 +238,7 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {customers.map((customer) => (
+                        {Array.isArray(customers) && customers.map((customer) => (
                           <SelectItem key={customer.id} value={customer.id}>
                             {customer.companyName} ({customer.contactPerson})
                           </SelectItem>
@@ -296,7 +310,7 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                   </div>
                 </div>
 
-                {availablePurchases.length > 0 ? (
+                {Array.isArray(availablePurchases) && availablePurchases.length > 0 ? (
                   <div className="mt-6">
                     <h3 className="text-sm font-medium mb-3">利用可能な在庫 ({availablePurchases.length}件)</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
@@ -423,7 +437,7 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent className="max-h-60">
-                                {availablePurchases.map((purchase) => (
+                                {Array.isArray(availablePurchases) && availablePurchases.map((purchase) => (
                                   <SelectItem key={purchase.id} value={purchase.id}>
                                     <div className="flex flex-col text-left">
                                       <span className="font-medium">{purchase.productName}</span>

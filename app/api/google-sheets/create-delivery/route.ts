@@ -13,11 +13,33 @@ export async function POST(request: NextRequest) {
     console.log('📊 Delivery sheet creation request:', { deliveryId, templateId });
     console.log('🚀 ENHANCED LOGGING VERSION - Debug info enabled');
 
-    if (!deliveryId || !templateId) {
+    if (!deliveryId) {
       return NextResponse.json(
-        { error: 'Delivery ID and template ID are required' },
+        { error: 'Delivery ID is required' },
         { status: 400 }
       );
+    }
+
+    // templateIdが提供されていない場合は、データベースから取得
+    if (!templateId) {
+      console.log('🔍 No templateId provided, fetching from database...');
+      const deliveryTemplate = await prisma.googleSheetTemplate.findFirst({
+        where: { type: 'delivery' }
+      });
+
+      if (deliveryTemplate) {
+        templateId = deliveryTemplate.templateSheetId;
+        console.log('✅ Found delivery template in database:', templateId);
+      } else {
+        console.log('❌ No delivery template found in database');
+        return NextResponse.json(
+          {
+            error: '納品書用のGoogle Sheetsテンプレートが見つかりません。テンプレート作成ボタンでテンプレートを作成してください。',
+            suggestion: 'データベースに納品書テンプレートが登録されていません。管理者に連絡してください。'
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // 納品データを取得

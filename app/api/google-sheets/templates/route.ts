@@ -1,262 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type');
 
-    // 環境変数からシートIDを取得
-    const deliverySheetId = process.env.GOOGLE_SHEETS_DELIVERY_SHEET_ID;
-    const invoiceSheetId = process.env.GOOGLE_SHEETS_INVOICE_SHEET_ID;
-    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+    console.log('🔍 テンプレート取得開始 - タイプ:', type);
 
-    console.log('🔍 Template environment variables:', {
-      deliverySheetId,
-      invoiceSheetId,
-      spreadsheetId,
-      hasSpreadsheetId: !!spreadsheetId
+    // データベースからテンプレートを取得
+    const dbTemplates = await prisma.googleSheetTemplate.findMany({
+      ...(type && { where: { type } })
     });
 
-    // テンプレート情報を構築
-    const templates = [];
+    console.log('📋 データベースから取得したテンプレート:', dbTemplates);
 
-    // 環境変数が設定されていない場合、Google Sheetsから直接取得を試行
-    if (!deliverySheetId && !invoiceSheetId && spreadsheetId) {
-      console.log('🔍 Environment variables not set, attempting to fetch sheet IDs from Google Sheets');
+    if (dbTemplates.length > 0) {
+      // データベースにテンプレートがある場合はそれを使用
+      const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+      const templates = dbTemplates.map(template => ({
+        id: template.id,
+        name: template.name,
+        type: template.type,
+        templateSheetId: template.templateSheetId,
+        spreadsheetId: spreadsheetId,
+        url: spreadsheetId ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${template.templateSheetId}` : undefined,
+        source: 'database',
+        createdAt: template.createdAt,
+        updatedAt: template.updatedAt
+      }));
 
-      try {
-        const { google } = require('googleapis');
-        
-        // 認証設定の詳細検証
-        const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
-        const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n');
-        
-        if (!clientEmail || !privateKey) {
-          throw new Error('Google Sheets authentication credentials are missing');
-        }
+      console.log('✅ データベーステンプレートを返します:', templates);
 
-        console.log('🔧 Setting up Google Sheets authentication...');
-        const auth = new google.auth.JWT(
-          clientEmail,
-          undefined,
-          privateKey,
-          ['https://www.googleapis.com/auth/spreadsheets.readonly']
-        );
-
-        const sheets = google.sheets({ version: 'v4', auth });
-        
-        console.log('📊 Fetching spreadsheet metadata...');
-        const spreadsheet = await sheets.spreadsheets.get({
-          spreadsheetId: spreadsheetId
-        });
-
-        const availableSheets = spreadsheet.data.sheets?.map(sheet => ({
-          id: sheet.properties?.sheetId,
-          title: sheet.properties?.title,
-          index: sheet.properties?.index
-        })) || [];
-
-        console.log('📋 Available sheets:', availableSheets);
-
-        // テンプレートシートを探す（より厳密で柔軟なマッチング）
-        const deliverySheet = availableSheets.find(s => {
-          const title = s.title?.toLowerCase() || '';
-          // 複数のパターンでマッチング
-          return (
-            title.includes('納品書テンプレート') ||
-            title.includes('納品書_テンプレート') ||
-            title.includes('納品書 テンプレート') ||
-            title.includes('deliverytemplate') ||
-            (title.includes('納品書') && title.includes('テンプレート')) ||
-            (title.includes('納品') && title.includes('テンプレート')) ||
-            title === '納品書テンプレート' ||
-            title === 'template_delivery' ||
-            title === 'delivery_template'
-          );
-        });
-
-        const invoiceSheet = availableSheets.find(s => {
-          const title = s.title?.toLowerCase() || '';
-          return (
-            title.includes('請求書テンプレート') ||
-            title.includes('請求書_テンプレート') ||
-            title.includes('請求書 テンプレート') ||
-            title.includes('invoicetemplate') ||
-            (title.includes('請求書') && title.includes('テンプレート')) ||
-            (title.includes('請求') && title.includes('テンプレート')) ||
-            title === '請求書テンプレート' ||
-            title === 'template_invoice' ||
-            title === 'invoice_template'
-          );
-        });
-
-        console.log('🔍 Template sheet search results:', {
-          deliveryFound: !!deliverySheet,
-          deliveryTitle: deliverySheet?.title,
-          deliveryId: deliverySheet?.id,
-          invoiceFound: !!invoiceSheet,
-          invoiceTitle: invoiceSheet?.title,
-          invoiceId: invoiceSheet?.id
-        });
-
-        // 見つかったテンプレートの検証
-        if (deliverySheet) {
-          const templateId = deliverySheet.id?.toString();
-          if (templateId && !isNaN(Number(templateId))) {
-            templates.push({
-              id: 'delivery-template',
-              name: '納品書テンプレート',
-              type: 'delivery',
-              templateSheetId: templateId,
-              spreadsheetId: spreadsheetId,
-              url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${templateId}`,
-              sheetTitle: deliverySheet.title
-            });
-            console.log('✅ Delivery template added:', templateId);
-          } else {
-            console.warn('⚠️ Invalid delivery template ID:', deliverySheet.id);
-          }
-        }
-
-        if (invoiceSheet) {
-          const templateId = invoiceSheet.id?.toString();
-          if (templateId && !isNaN(Number(templateId))) {
-            templates.push({
-              id: 'invoice-template',
-              name: '請求書テンプレート',
-              type: 'invoice',
-              templateSheetId: templateId,
-              spreadsheetId: spreadsheetId,
-              url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${templateId}`,
-              sheetTitle: invoiceSheet.title
-            });
-            console.log('✅ Invoice template added:', templateId);
-          } else {
-            console.warn('⚠️ Invalid invoice template ID:', invoiceSheet.id);
-          }
-        }
-
-        // テンプレートが見つからない場合の詳細情報
-        if (templates.length === 0) {
-          console.warn('⚠️ No templates found. Available sheet titles:', 
-            availableSheets.map(s => s.title)
-          );
-          
-          return NextResponse.json({
-            templates: [],
-            message: 'テンプレートシートが見つかりませんでした',
-            availableSheets: availableSheets.map(s => ({ 
-              title: s.title, 
-              id: s.id 
-            })),
-            suggestions: [
-              'シート名に「納品書テンプレート」または「請求書テンプレート」を含めてください',
-              '環境変数 GOOGLE_SHEETS_DELIVERY_SHEET_ID, GOOGLE_SHEETS_INVOICE_SHEET_ID を設定することも可能です'
-            ]
-          });
-        }
-
-        console.log('✅ Templates found via auto-discovery:', templates);
-
-      } catch (error) {
-        console.error('❌ Failed to fetch sheets from Google Sheets:', error);
-        
-        // より詳細なエラー情報を提供
-        let errorMessage = 'テンプレート取得に失敗しました';
-        let suggestions = [];
-        
-        if (error instanceof Error) {
-          if (error.message.includes('credentials') || error.message.includes('authentication')) {
-            errorMessage = 'Google Sheets認証に失敗しました';
-            suggestions = [
-              'GOOGLE_SHEETS_CLIENT_EMAIL環境変数を確認してください',
-              'GOOGLE_SHEETS_PRIVATE_KEY環境変数を確認してください',
-              'サービスアカウントの設定を確認してください'
-            ];
-          } else if (error.message.includes('403') || error.message.includes('permission')) {
-            errorMessage = 'スプレッドシートへのアクセス権限がありません';
-            suggestions = [
-              'スプレッドシートをサービスアカウントと共有してください',
-              'スプレッドシートIDが正しいことを確認してください'
-            ];
-          } else if (error.message.includes('404') || error.message.includes('not found')) {
-            errorMessage = 'スプレッドシートが見つかりません';
-            suggestions = [
-              'GOOGLE_SHEETS_SPREADSHEET_ID環境変数を確認してください',
-              'スプレッドシートが削除されていないか確認してください'
-            ];
-          }
-        }
-
-        return NextResponse.json({
-          error: errorMessage,
-          details: error instanceof Error ? error.message : String(error),
-          suggestions: suggestions,
-          fallbackMessage: '手動でテンプレートIDを環境変数に設定することをお勧めします'
-        }, { status: 500 });
-      }
-    } else {
-      // 環境変数が設定されている場合の従来の処理
-      console.log('✅ Using environment variables for template configuration');
-      
-      if (deliverySheetId && spreadsheetId) {
-        // IDの妥当性チェック
-        if (!isNaN(Number(deliverySheetId))) {
-          templates.push({
-            id: 'delivery-template',
-            name: '納品書テンプレート',
-            type: 'delivery',
-            templateSheetId: deliverySheetId,
-            spreadsheetId: spreadsheetId,
-            url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${deliverySheetId}`,
-            source: 'environment'
-          });
-          console.log('✅ Delivery template from env vars:', deliverySheetId);
-        } else {
-          console.warn('⚠️ Invalid delivery sheet ID in env vars:', deliverySheetId);
-        }
-      }
-
-      if (invoiceSheetId && spreadsheetId) {
-        // IDの妥当性チェック
-        if (!isNaN(Number(invoiceSheetId))) {
-          templates.push({
-            id: 'invoice-template',
-            name: '請求書テンプレート',
-            type: 'invoice',
-            templateSheetId: invoiceSheetId,
-            spreadsheetId: spreadsheetId,
-            url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${invoiceSheetId}`,
-            source: 'environment'
-          });
-          console.log('✅ Invoice template from env vars:', invoiceSheetId);
-        } else {
-          console.warn('⚠️ Invalid invoice sheet ID in env vars:', invoiceSheetId);
-        }
-      }
+      return NextResponse.json({
+        templates: templates,
+        totalFound: templates.length,
+        message: 'テンプレートが正常に取得されました',
+        source: 'database'
+      });
     }
 
-    // タイプでフィルタリング
-    const filteredTemplates = type ? templates.filter(t => t.type === type) : templates;
-
-    console.log('📊 Final template list:', {
-      total: templates.length,
-      filtered: filteredTemplates.length,
-      filterType: type
-    });
+    // データベースにテンプレートがない場合
+    console.log('📋 データベースにテンプレートがありません');
 
     return NextResponse.json({
-      templates: filteredTemplates,
-      totalFound: templates.length,
-      message: filteredTemplates.length > 0 ? 
-        'テンプレートが正常に取得されました' : 
-        'テンプレートが見つかりませんでした'
+      templates: [],
+      totalFound: 0,
+      message: 'テンプレートが見つかりません。テンプレートを作成してください。',
+      source: 'database',
+      suggestion: 'POST /api/google-sheets/templates with {"createSheets": true} to create templates'
     });
 
   } catch (error) {
     console.error('❌ Error fetching Google Sheet templates:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to fetch templates',
         details: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString()

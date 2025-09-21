@@ -7,6 +7,7 @@ const updateDeliverySchema = z.object({
   customerId: z.string().optional(),
   deliveryDate: z.string().optional(),
   status: z.string().optional(),
+  notes: z.string().optional(),
   items: z.array(z.object({
     purchaseId: z.string(),
     quantity: z.number().min(0.01),
@@ -203,6 +204,7 @@ export async function PUT(
       if (validatedData.customerId) updateData.customerId = validatedData.customerId
       if (validatedData.deliveryDate) updateData.deliveryDate = new Date(validatedData.deliveryDate)
       if (validatedData.status) updateData.status = validatedData.status
+      if (validatedData.notes !== undefined) updateData.notes = validatedData.notes
       if (validatedData.totalAmount !== undefined) updateData.totalAmount = validatedData.totalAmount
 
       return await tx.delivery.update({
