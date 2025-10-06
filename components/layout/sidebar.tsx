@@ -42,6 +42,7 @@ const masterSubNav = [
   { name: "仕入れ先", href: "/masters/suppliers", icon: Users },
   { name: "納品先", href: "/masters/customers", icon: Users },
   { name: "商品カテゴリー", href: "/masters/categories", icon: Package },
+  { name: "ユーザー管理", href: "/masters/users", icon: Users },
 ]
 
 export function Sidebar() {
