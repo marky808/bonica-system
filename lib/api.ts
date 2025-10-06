@@ -752,8 +752,43 @@ class ApiClient {
     if (!response.ok) {
       throw new Error('CSV download failed')
     }
-    
+
     return response.blob()
+  }
+
+  // User methods
+  async getUsers(): Promise<ApiResponse<User[]>> {
+    return this.request<User[]>('/users')
+  }
+
+  async createUser(data: {
+    name: string
+    email: string
+    password: string
+    role?: string
+  }): Promise<ApiResponse<User>> {
+    return this.request<User>('/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateUser(id: string, data: {
+    name?: string
+    email?: string
+    password?: string
+    role?: string
+  }): Promise<ApiResponse<User>> {
+    return this.request<User>(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteUser(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>(`/users/${id}`, {
+      method: 'DELETE',
+    })
   }
 }
 
