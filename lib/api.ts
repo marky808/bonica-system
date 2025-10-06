@@ -353,6 +353,19 @@ class ApiClient {
     })
   }
 
+  async updateCategory(id: string, data: { name: string }): Promise<ApiResponse<Category>> {
+    return this.request<Category>(`/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteCategory(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>(`/categories/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
   // Supplier methods
   async getSuppliers(): Promise<ApiResponse<Supplier[]>> {
     return this.request<Supplier[]>('/suppliers')
