@@ -99,16 +99,22 @@ export function CategoryManagement({ onCategoryUpdated }: CategoryManagementProp
         return
       }
 
+      console.log('📝 Creating category:', newCategory.name.trim())
       const response = await apiClient.createCategory({ name: newCategory.name.trim() })
+      console.log('✅ Category creation response:', response)
+
       if (response.data) {
         await loadCategories()
         setNewCategory({ name: "" })
         setIsAdding(false)
         onCategoryUpdated?.()
         alert("カテゴリーが正常に追加されました")
+      } else {
+        console.error('❌ No data in response:', response)
+        alert('カテゴリーの追加に失敗しました: レスポンスにデータがありません')
       }
     } catch (err: any) {
-      console.error('Failed to create category:', err)
+      console.error('❌ Failed to create category:', err)
       alert(err.message || 'カテゴリーの追加に失敗しました')
     }
   }
