@@ -21,6 +21,9 @@ const deliverySchema = z.object({
     purchaseId: z.string().min(1, "商品を選択してください"),
     quantity: z.number().min(0.01, "数量を入力してください"),
     unitPrice: z.number().min(0, "単価を入力してください"),
+    deliveryDate: z.string().optional(),
+    unit: z.string().optional(),
+    taxRate: z.number().default(8),
   })).min(1, "納品商品を1つ以上選択してください"),
 }).superRefine((data, ctx) => {
   // 在庫チェック
@@ -52,13 +55,18 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
     resolver: zodResolver(deliverySchema),
     defaultValues: {
       customerId: initialData?.customerId || "",
-      deliveryDate: initialData?.deliveryDate 
+      deliveryDate: initialData?.deliveryDate
         ? new Date(initialData.deliveryDate).toISOString().split("T")[0]
         : new Date().toISOString().split("T")[0],
       items: initialData?.items?.map(item => ({
         purchaseId: item.purchaseId,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
+        deliveryDate: item.deliveryDate
+          ? new Date(item.deliveryDate).toISOString().split("T")[0]
+          : "",
+        unit: item.unit || "",
+        taxRate: item.taxRate || 8,
       })) || [],
     },
   })
@@ -542,6 +550,66 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                       />
                     </div>
 
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.deliveryDate`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>納品日</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="date"
+                                {...field}
+                                className="h-12"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.unit`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>単位</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="kg, 個, 箱"
+                                {...field}
+                                className="h-12"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.taxRate`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>税率</FormLabel>
+                            <Select onValueChange={(value) => field.onChange(Number(value))} value={String(field.value)}>
+                              <FormControl>
+                                <SelectTrigger className="h-12">
+                                  <SelectValue placeholder="税率を選択" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="8">8%</SelectItem>
+                                <SelectItem value="10">10%</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
                     {form.watch(`items.${index}.purchaseId`) && form.watch(`items.${index}.quantity`) && (
                       <div className="text-right">
                         <span className="text-lg font-bold text-primary">
@@ -556,7 +624,14 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => append({ purchaseId: "", quantity: 0, unitPrice: 0 })}
+                    onClick={() => append({
+                      purchaseId: "",
+                      quantity: 0,
+                      unitPrice: 0,
+                      deliveryDate: form.getValues("deliveryDate"),
+                      unit: "",
+                      taxRate: 8
+                    })}
                     className="h-12"
                   >
                     <Plus className="h-4 w-4 mr-2" />

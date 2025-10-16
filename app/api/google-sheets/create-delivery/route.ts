@@ -20,26 +20,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // templateIdが提供されていない場合は、データベースから取得
+    // templateIdが提供されていない場合は、環境変数から取得
     if (!templateId) {
-      console.log('🔍 No templateId provided, fetching from database...');
-      const deliveryTemplate = await prisma.googleSheetTemplate.findFirst({
-        where: { type: 'delivery' }
-      });
+      console.log('🔍 No templateId provided, using environment variable...');
+      templateId = process.env.GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID;
 
-      if (deliveryTemplate) {
-        templateId = deliveryTemplate.templateSheetId;
-        console.log('✅ Found delivery template in database:', templateId);
-      } else {
-        console.log('❌ No delivery template found in database');
+      if (!templateId) {
+        console.log('❌ GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID not set');
         return NextResponse.json(
           {
-            error: '納品書用のGoogle Sheetsテンプレートが見つかりません。テンプレート作成ボタンでテンプレートを作成してください。',
-            suggestion: 'データベースに納品書テンプレートが登録されていません。管理者に連絡してください。'
+            error: '納品書用のGoogle Sheetsテンプレートが設定されていません。環境変数を確認してください。',
+            suggestion: 'GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID環境変数を設定してください。'
           },
           { status: 400 }
         );
       }
+      console.log('✅ Using delivery template from environment:', templateId);
     }
 
     // 納品データを取得
@@ -176,18 +172,47 @@ export async function POST(request: NextRequest) {
     console.log('🔍 Generated number:', generatedNumber);
     console.log('🔍 Final delivery number:', finalDeliveryNumber);
 
+    // 税率別集計を計算
+    const items8 = delivery.items.filter(item => item.taxRate === 8);
+    const items10 = delivery.items.filter(item => item.taxRate === 10);
+
+    const subtotal8 = items8.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+    const subtotal10 = items10.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+
+    const tax8 = Math.floor(subtotal8 * 0.08);
+    const tax10 = Math.floor(subtotal10 * 0.1);
+
+    const totalTax = tax8 + tax10;
+    const totalAmount = subtotal8 + subtotal10 + totalTax;
+
     const deliveryData = {
       delivery_number: finalDeliveryNumber,
       delivery_date: delivery.deliveryDate.toISOString().split('T')[0],
       customer_name: delivery.customer.companyName,
       customer_address: delivery.customer.deliveryAddress,
-      items: delivery.items.map(item => ({
-        product_name: item.purchase.productName,
-        quantity: item.quantity,
-        unit_price: item.unitPrice,
-        amount: item.amount
-      })),
-      total_amount: delivery.totalAmount,
+      invoice_registration_number: delivery.customer.invoiceRegistrationNumber || '',
+      invoice_notes: delivery.customer.invoiceNotes || '',
+      items: delivery.items.map(item => {
+        const itemSubtotal = item.unitPrice * item.quantity;
+        const itemTaxAmount = Math.floor(itemSubtotal * (item.taxRate / 100));
+        return {
+          product_name: item.purchase.productName,
+          delivery_date: item.deliveryDate?.toISOString().split('T')[0] || '',
+          quantity: item.quantity,
+          unit: item.unit || '',
+          unit_price: item.unitPrice,
+          tax_rate: item.taxRate,
+          subtotal: itemSubtotal,
+          tax_amount: itemTaxAmount,
+          amount: itemSubtotal + itemTaxAmount
+        };
+      }),
+      subtotal_8: subtotal8,
+      tax_8: tax8,
+      subtotal_10: subtotal10,
+      tax_10: tax10,
+      total_tax: totalTax,
+      total_amount: totalAmount,
       notes: delivery.notes || ''
     };
 

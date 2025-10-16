@@ -34,6 +34,8 @@ const customerSchema = z.object({
   billingCycle: z.string().default("monthly"),
   billingDay: z.number().min(1).max(31).default(31),
   paymentTerms: z.string().default("30days"),
+  invoiceRegistrationNumber: z.string().optional(),
+  invoiceNotes: z.string().optional(),
 })
 
 type CustomerFormData = z.infer<typeof customerSchema>
@@ -66,6 +68,8 @@ export function CustomerManagement({ onCustomerUpdated }: CustomerManagementProp
       billingCycle: "monthly",
       billingDay: 31,
       paymentTerms: "30days",
+      invoiceRegistrationNumber: "",
+      invoiceNotes: "",
     },
   })
 
@@ -150,6 +154,8 @@ export function CustomerManagement({ onCustomerUpdated }: CustomerManagementProp
       billingCycle: customer.billingCycle || "monthly",
       billingDay: customer.billingDay || 31,
       paymentTerms: customer.paymentTerms || "30days",
+      invoiceRegistrationNumber: customer.invoiceRegistrationNumber || "",
+      invoiceNotes: customer.invoiceNotes || "",
     })
     setShowForm(true)
   }
@@ -461,6 +467,38 @@ export function CustomerManagement({ onCustomerUpdated }: CustomerManagementProp
                     <FormControl>
                       <Textarea
                         placeholder="請求書に記載する特記事項"
+                        rows={2}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="invoiceRegistrationNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>インボイス登録番号</FormLabel>
+                    <FormControl>
+                      <Input placeholder="T1234567890123" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="invoiceNotes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>請求書特記事項</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="請求書に記載する追加の特記事項"
                         rows={2}
                         {...field}
                       />

@@ -15,6 +15,8 @@ const updateCustomerSchema = z.object({
   billingCycle: z.string().default("monthly"),
   billingDay: z.number().min(1).max(31).default(31),
   paymentTerms: z.string().default("30days"),
+  invoiceRegistrationNumber: z.string().optional(),
+  invoiceNotes: z.string().optional(),
 })
 
 // PUT /api/customers/[id] - Update customer
@@ -82,6 +84,8 @@ export async function PUT(
         billingCycle: validatedData.billingCycle,
         billingDay: validatedData.billingDay,
         paymentTerms: validatedData.paymentTerms,
+        invoiceRegistrationNumber: validatedData.invoiceRegistrationNumber || null,
+        invoiceNotes: validatedData.invoiceNotes || null,
       }
     })
     

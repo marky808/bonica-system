@@ -29,12 +29,24 @@ interface DeliveryData {
   delivery_date: string;
   customer_name: string;
   customer_address?: string;
+  invoice_registration_number?: string;
+  invoice_notes?: string;
   items: {
     product_name: string;
     quantity: number;
     unit_price: number;
     amount: number;
+    delivery_date?: string;
+    unit?: string;
+    tax_rate: number;
+    subtotal: number;
+    tax_amount: number;
   }[];
+  subtotal_8: number;
+  tax_8: number;
+  subtotal_10: number;
+  tax_10: number;
+  total_tax: number;
   total_amount: number;
   notes?: string;
 }
@@ -46,12 +58,25 @@ interface InvoiceData {
   customer_name: string;
   customer_address?: string;
   billing_address?: string;
+  invoice_registration_number?: string;
+  billing_cycle?: string;
+  billing_day?: number;
+  payment_terms?: string;
+  invoice_notes?: string;
   items: {
     description: string;
     quantity: number;
     unit_price: number;
     amount: number;
+    tax_rate?: number;
+    subtotal?: number;
+    tax_amount?: number;
   }[];
+  subtotal_8?: number;
+  tax_8?: number;
+  subtotal_10?: number;
+  tax_10?: number;
+  total_tax: number;
   subtotal: number;
   tax_amount: number;
   total_amount: number;
@@ -147,120 +172,65 @@ class GoogleSheetsClient {
     );
   }
 
-  async createDeliverySheet(data: DeliveryData, templateSheetId: string): Promise<{ sheetId: string; url: string }> {
+  async createDeliverySheet(data: DeliveryData, templateFileId: string): Promise<{ sheetId: string; url: string }> {
     try {
       this.validateDeliveryData(data);
-      
-      const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
-      if (!spreadsheetId) {
-        throw new GoogleSheetsError('スプレッドシートIDが設定されていません', undefined, GoogleSheetsErrorCode.UNKNOWN_ERROR);
-      }
 
-      console.log('📊 Creating delivery sheet with:', { spreadsheetId, templateSheetId });
+      console.log('📊 Creating delivery sheet with template file ID:', templateFileId);
 
-      // テンプレートIDの詳細検証と数値変換の強化
-      let sourceSheetId: number;
+      // テンプレートファイルをコピー（Drive API使用）
+      const drive = google.drive({ version: 'v3', auth: this.auth });
+      const newFileName = `納品書_${data.delivery_number}_${data.customer_name}_${new Date().toISOString().slice(0, 10)}`;
+
+      console.log('📋 Copying template file:', { templateFileId, newFileName });
+
+      let copiedFile;
       try {
-        // 空文字やnull/undefinedチェック
-        if (!templateSheetId || templateSheetId.trim() === '') {
-          throw new Error('Template sheet ID is empty or undefined');
-        }
-
-        // 数値変換前のフォーマットチェック
-        const trimmedId = templateSheetId.trim();
-        if (!/^\d+$/.test(trimmedId)) {
-          throw new Error(`Template sheet ID contains non-numeric characters: "${trimmedId}"`);
-        }
-
-        sourceSheetId = parseInt(trimmedId, 10);
-        
-        // 変換後の値の妥当性チェック
-        if (isNaN(sourceSheetId) || sourceSheetId < 0) {
-          throw new Error(`Invalid template sheet ID after parsing: ${sourceSheetId}`);
-        }
-        
-        // Google Sheetsの実際の制限をチェック
-        if (sourceSheetId > 2147483647) { // 32bit integer limit
-          throw new Error(`Template sheet ID exceeds maximum value: ${sourceSheetId}`);
-        }
-
-        console.log('✅ Template sheet ID validated successfully:', sourceSheetId);
-      } catch (parseError) {
-        console.error('❌ Template sheet ID validation failed:', {
-          originalId: templateSheetId,
-          error: parseError instanceof Error ? parseError.message : String(parseError)
-        });
-        
-        throw new GoogleSheetsError(
-          `テンプレートシートIDが無効です: "${templateSheetId}" - ${parseError instanceof Error ? parseError.message : String(parseError)}`,
-          parseError instanceof Error ? parseError : undefined,
-          GoogleSheetsErrorCode.INVALID_DATA
-        );
-      }
-
-      // 新しいシートを作成（テンプレートシートを複製）
-      const newSheetName = `納品書_${data.delivery_number}_${data.customer_name}_${new Date().toISOString().slice(0, 10)}`;
-
-      console.log('📋 Duplicating sheet:', { sourceSheetId, newSheetName });
-
-      let batchUpdateResponse;
-      try {
-        batchUpdateResponse = await this.sheets.spreadsheets.batchUpdate({
-          spreadsheetId: spreadsheetId,
+        copiedFile = await drive.files.copy({
+          fileId: templateFileId,
           requestBody: {
-            requests: [{
-              duplicateSheet: {
-                sourceSheetId: sourceSheetId,
-                newSheetName: newSheetName
-              }
-            }]
+            name: newFileName
           }
         });
-      } catch (duplicateError: any) {
-        console.error('❌ Sheet duplication failed:', {
-          sourceSheetId,
-          newSheetName,
-          error: duplicateError.message,
-          code: duplicateError.code,
-          status: duplicateError.status
+      } catch (copyError: any) {
+        console.error('❌ File copy failed:', {
+          templateFileId,
+          newFileName,
+          error: copyError.message,
+          code: copyError.code,
+          status: copyError.status
         });
 
-        // より具体的なエラーメッセージを提供
-        if (duplicateError.message?.includes('Invalid requests[0].duplicateSheet: Source sheet id') ||
-            duplicateError.message?.includes('Unable to parse range')) {
+        if (copyError.code === 404) {
           throw new GoogleSheetsError(
-            `テンプレートシート(ID: ${sourceSheetId})が見つかりません。テンプレート設定を確認してください。`,
-            duplicateError,
+            `納品書テンプレートファイル(ID: ${templateFileId})が見つかりません。テンプレート設定を確認してください。`,
+            copyError,
             GoogleSheetsErrorCode.TEMPLATE_NOT_FOUND
           );
-        } else if (duplicateError.code === 403 || duplicateError.status === 403) {
+        } else if (copyError.code === 403) {
           throw new GoogleSheetsError(
-            `テンプレートシート(ID: ${sourceSheetId})にアクセス権限がありません。共有設定を確認してください。`,
-            duplicateError,
-            GoogleSheetsErrorCode.AUTH_ERROR
-          );
-        } else if (duplicateError.code === 404 || duplicateError.status === 404) {
-          throw new GoogleSheetsError(
-            `スプレッドシート(ID: ${spreadsheetId})またはテンプレートシート(ID: ${sourceSheetId})が見つかりません。`,
-            duplicateError,
-            GoogleSheetsErrorCode.TEMPLATE_NOT_FOUND
+            `納品書テンプレートファイル(ID: ${templateFileId})にアクセス権限がありません。共有設定を確認してください。`,
+            copyError,
+            GoogleSheetsErrorCode.PERMISSION_DENIED
           );
         }
-        
-        throw duplicateError;
+
+        throw copyError;
       }
 
-      const newSheetId = batchUpdateResponse.data.replies![0].duplicateSheet!.properties!.sheetId!.toString();
-      
-      console.log('✅ Sheet duplicated successfully:', { newSheetId, newSheetName });
+      if (!copiedFile.data.id) {
+        throw new GoogleSheetsError('ファイルのコピーに失敗しました', undefined, GoogleSheetsErrorCode.UNKNOWN_ERROR);
+      }
 
-      // データを更新（シート名を使用）
+      const newFileId = copiedFile.data.id;
+      console.log('✅ File copied successfully:', { newFileId, newFileName });
+
+      // データを更新
       try {
-        await this.updateDeliverySheet(spreadsheetId, newSheetName, data);
+        await this.updateDeliverySheet(newFileId, data);
         console.log('✅ Sheet data updated successfully');
       } catch (updateError: any) {
         console.error('❌ Sheet data update failed:', updateError);
-        // 作成されたシートは残すが、データ更新失敗として処理
         throw new GoogleSheetsError(
           'Google Sheetsは作成されましたが、データの更新に失敗しました。手動でデータを入力してください。',
           updateError,
@@ -268,19 +238,18 @@ class GoogleSheetsClient {
         );
       }
 
-      const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${newSheetId}`;
-      
-      console.log('🎉 Delivery sheet creation completed:', { sheetId: newSheetId, url });
-      
-      return { sheetId: newSheetId, url };
+      const url = `https://docs.google.com/spreadsheets/d/${newFileId}`;
+
+      console.log('🎉 Delivery sheet creation completed:', { sheetId: newFileId, url });
+
+      return { sheetId: newFileId, url };
     } catch (error) {
       console.error('❌ Error in createDeliverySheet:', error);
-      
+
       if (error instanceof GoogleSheetsError) {
         throw error;
       }
-      
-      // より詳細なエラー情報をログ出力
+
       if (error && typeof error === 'object') {
         console.error('❌ Error details:', {
           name: (error as any).name,
@@ -290,7 +259,7 @@ class GoogleSheetsClient {
           errors: (error as any).errors
         });
       }
-      
+
       this.handleGoogleAPIError(error, 'createDeliverySheet');
     }
   }
@@ -351,35 +320,56 @@ class GoogleSheetsClient {
     }
   }
 
-  private async updateDeliverySheet(spreadsheetId: string, sheetName: string, data: DeliveryData) {
-    console.log('📊 Updating delivery sheet:', { spreadsheetId, sheetName });
-    
+  private async updateDeliverySheet(spreadsheetId: string, data: DeliveryData) {
+    console.log('📊 Updating delivery sheet:', { spreadsheetId });
+
     const updates = [
       // 基本情報
-      { range: `'${sheetName}'!B3`, values: [[data.delivery_number]] },
-      { range: `'${sheetName}'!B4`, values: [[data.delivery_date]] },
-      { range: `'${sheetName}'!B5`, values: [[data.customer_name]] },
-      { range: `'${sheetName}'!B6`, values: [[data.customer_address || '']] },
+      { range: 'B3', values: [[data.delivery_number]] },
+      { range: 'B4', values: [[data.delivery_date]] },
+      { range: 'B5', values: [[data.customer_name]] },
+      { range: 'B6', values: [[data.customer_address || '']] },
+      { range: 'B7', values: [[data.invoice_registration_number || '']] },
+      { range: 'B8', values: [[data.invoice_notes || '']] },
     ];
 
-    // 商品明細（A11から開始 - BONICAシステム仕様準拠）
+    // 商品明細（A11から開始）
     const itemsStartRow = 11;
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
       updates.push(
-        { range: `'${sheetName}'!A${row}`, values: [[item.product_name]] },
-        { range: `'${sheetName}'!B${row}`, values: [[item.quantity]] },
-        { range: `'${sheetName}'!C${row}`, values: [[item.unit_price]] },
-        { range: `'${sheetName}'!D${row}`, values: [[item.amount]] }
+        { range: `A${row}`, values: [[item.product_name]] },
+        { range: `B${row}`, values: [[item.delivery_date || '']] },
+        { range: `C${row}`, values: [[item.quantity]] },
+        { range: `D${row}`, values: [[item.unit || '']] },
+        { range: `E${row}`, values: [[item.unit_price]] },
+        { range: `F${row}`, values: [[item.tax_rate]] },
+        { range: `G${row}`, values: [[item.subtotal]] },
+        { range: `H${row}`, values: [[item.tax_amount]] },
+        { range: `I${row}`, values: [[item.amount]] }
       );
     });
 
-    // 合計金額
-    updates.push({ range: `'${sheetName}'!D${itemsStartRow + data.items.length + 2}`, values: [[data.total_amount]] });
+    // 税率別集計（商品明細の下 + 2行）
+    const summaryStartRow = itemsStartRow + data.items.length + 2;
+    updates.push(
+      { range: `B${summaryStartRow}`, values: [['8%対象額']] },
+      { range: `C${summaryStartRow}`, values: [[data.subtotal_8]] },
+      { range: `B${summaryStartRow + 1}`, values: [['8%消費税']] },
+      { range: `C${summaryStartRow + 1}`, values: [[data.tax_8]] },
+      { range: `B${summaryStartRow + 2}`, values: [['10%対象額']] },
+      { range: `C${summaryStartRow + 2}`, values: [[data.subtotal_10]] },
+      { range: `B${summaryStartRow + 3}`, values: [['10%消費税']] },
+      { range: `C${summaryStartRow + 3}`, values: [[data.tax_10]] },
+      { range: `B${summaryStartRow + 4}`, values: [['合計税額']] },
+      { range: `C${summaryStartRow + 4}`, values: [[data.total_tax]] },
+      { range: `B${summaryStartRow + 5}`, values: [['合計金額（税込）']] },
+      { range: `C${summaryStartRow + 5}`, values: [[data.total_amount]] }
+    );
 
     // 備考
     if (data.notes) {
-      updates.push({ range: `'${sheetName}'!A${itemsStartRow + data.items.length + 5}`, values: [[data.notes]] });
+      updates.push({ range: `A${summaryStartRow + 8}`, values: [[data.notes]] });
     }
 
     console.log('📊 Batch update ranges:', updates.map(u => u.range));
@@ -405,31 +395,50 @@ class GoogleSheetsClient {
       { range: 'B6', values: [[data.customer_name]] },
       { range: 'B7', values: [[data.customer_address || '']] },
       { range: 'B8', values: [[data.billing_address || '']] },
+      { range: 'B9', values: [[data.invoice_registration_number || '']] },
+      { range: 'B10', values: [[data.billing_cycle || '']] },
+      { range: 'B11', values: [[data.billing_day || '']] },
+      { range: 'B12', values: [[data.payment_terms || '']] },
+      { range: 'B13', values: [[data.invoice_notes || '']] },
     ];
 
-    // 商品明細（A13から開始 - BONICAシステム仕様準拠）
-    const itemsStartRow = 13;
+    // 商品明細（A15から開始）
+    const itemsStartRow = 15;
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
       updates.push(
         { range: `A${row}`, values: [[item.description]] },
         { range: `B${row}`, values: [[item.quantity]] },
         { range: `C${row}`, values: [[item.unit_price]] },
-        { range: `D${row}`, values: [[item.amount]] }
+        { range: `D${row}`, values: [[item.tax_rate || 10]] },
+        { range: `E${row}`, values: [[item.subtotal || item.amount]] },
+        { range: `F${row}`, values: [[item.tax_amount || 0]] },
+        { range: `G${row}`, values: [[item.amount]] }
       );
     });
 
-    // 金額計算
-    const totalsStartRow = itemsStartRow + data.items.length + 2;
+    // 税率別集計（商品明細の下 + 2行）
+    const summaryStartRow = itemsStartRow + data.items.length + 2;
     updates.push(
-      { range: `D${totalsStartRow}`, values: [[data.subtotal]] },
-      { range: `D${totalsStartRow + 1}`, values: [[data.tax_amount]] },
-      { range: `D${totalsStartRow + 2}`, values: [[data.total_amount]] }
+      { range: `B${summaryStartRow}`, values: [['8%対象額']] },
+      { range: `C${summaryStartRow}`, values: [[data.subtotal_8 || 0]] },
+      { range: `B${summaryStartRow + 1}`, values: [['8%消費税']] },
+      { range: `C${summaryStartRow + 1}`, values: [[data.tax_8 || 0]] },
+      { range: `B${summaryStartRow + 2}`, values: [['10%対象額']] },
+      { range: `C${summaryStartRow + 2}`, values: [[data.subtotal_10 || 0]] },
+      { range: `B${summaryStartRow + 3}`, values: [['10%消費税']] },
+      { range: `C${summaryStartRow + 3}`, values: [[data.tax_10 || 0]] },
+      { range: `B${summaryStartRow + 4}`, values: [['小計（税抜）']] },
+      { range: `C${summaryStartRow + 4}`, values: [[data.subtotal]] },
+      { range: `B${summaryStartRow + 5}`, values: [['合計税額']] },
+      { range: `C${summaryStartRow + 5}`, values: [[data.total_tax]] },
+      { range: `B${summaryStartRow + 6}`, values: [['合計金額（税込）']] },
+      { range: `C${summaryStartRow + 6}`, values: [[data.total_amount]] }
     );
 
     // 備考
     if (data.notes) {
-      updates.push({ range: `A${totalsStartRow + 5}`, values: [[data.notes]] });
+      updates.push({ range: `A${summaryStartRow + 9}`, values: [[data.notes]] });
     }
 
     // 一括更新
@@ -474,17 +483,12 @@ class GoogleSheetsClient {
     }
   }
 
-  async exportToPdf(sheetId: string): Promise<string> {
+  async exportToPdf(fileId: string): Promise<string> {
     try {
-      const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
-      if (!spreadsheetId) {
-        throw new GoogleSheetsError('スプレッドシートIDが設定されていません', undefined, GoogleSheetsErrorCode.UNKNOWN_ERROR);
-      }
+      console.log('📕 Exporting PDF for file:', { fileId });
 
-      console.log('📕 Exporting PDF for sheet:', { spreadsheetId, sheetId });
-
-      // Google SheetsのPDFエクスポートURL（直接アクセス可能）
-      const pdfUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=pdf&gid=${sheetId}`;
+      // Google SheetsのPDFエクスポートURL（ファイルベース）
+      const pdfUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?format=pdf`;
 
       console.log('✅ PDF URL generated:', pdfUrl);
       return pdfUrl;

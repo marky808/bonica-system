@@ -5,13 +5,31 @@ import { prisma } from '@/lib/db';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { customerId, startDate, endDate, templateId } = body;
+    let { customerId, startDate, endDate, templateId } = body;
 
-    if (!customerId || !startDate || !endDate || !templateId) {
+    if (!customerId || !startDate || !endDate) {
       return NextResponse.json(
-        { error: '顧客ID、期間、テンプレートIDが必要です' },
+        { error: '顧客ID、期間が必要です' },
         { status: 400 }
       );
+    }
+
+    // templateIdが提供されていない場合は、環境変数から取得
+    if (!templateId) {
+      console.log('🔍 No templateId provided, using environment variable...');
+      templateId = process.env.GOOGLE_SHEETS_INVOICE_TEMPLATE_SHEET_ID;
+
+      if (!templateId) {
+        console.log('❌ GOOGLE_SHEETS_INVOICE_TEMPLATE_SHEET_ID not set');
+        return NextResponse.json(
+          {
+            error: '請求書用のGoogle Sheetsテンプレートが設定されていません。環境変数を確認してください。',
+            suggestion: 'GOOGLE_SHEETS_INVOICE_TEMPLATE_SHEET_ID環境変数を設定してください。'
+          },
+          { status: 400 }
+        );
+      }
+      console.log('✅ Using invoice template from environment:', templateId);
     }
 
     // 顧客情報を取得
@@ -52,53 +70,88 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 納品データを請求書項目に集約
+    // 納品データを請求書項目に集約（税率別対応）
     const itemsMap = new Map<string, {
       description: string;
       quantity: number;
       unit_price: number;
       amount: number;
+      tax_rate: number;
+      subtotal: number;
+      tax_amount: number;
     }>();
 
     deliveries.forEach(delivery => {
       delivery.items.forEach(item => {
-        const key = `${item.purchase.productName}_${item.unitPrice}`;
+        const key = `${item.purchase.productName}_${item.unitPrice}_${item.taxRate}`;
         const existing = itemsMap.get(key);
-        
+
+        const itemSubtotal = item.unitPrice * item.quantity;
+        const itemTaxAmount = Math.floor(itemSubtotal * (item.taxRate / 100));
+
         if (existing) {
           existing.quantity += item.quantity;
-          existing.amount += item.amount;
+          existing.subtotal += itemSubtotal;
+          existing.tax_amount += itemTaxAmount;
+          existing.amount += (itemSubtotal + itemTaxAmount);
         } else {
           itemsMap.set(key, {
             description: `${item.purchase.productName} (${delivery.deliveryDate.toISOString().split('T')[0]})`,
             quantity: item.quantity,
             unit_price: item.unitPrice,
-            amount: item.amount
+            tax_rate: item.taxRate,
+            subtotal: itemSubtotal,
+            tax_amount: itemTaxAmount,
+            amount: itemSubtotal + itemTaxAmount
           });
         }
       });
     });
 
     const items = Array.from(itemsMap.values());
-    const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
-    const taxRate = 0.1; // 10%の消費税
-    const taxAmount = Math.floor(subtotal * taxRate);
-    const totalAmount = subtotal + taxAmount;
+
+    // 税率別集計
+    const items8 = items.filter(item => item.tax_rate === 8);
+    const items10 = items.filter(item => item.tax_rate === 10);
+
+    const subtotal8 = items8.reduce((sum, item) => sum + item.subtotal, 0);
+    const subtotal10 = items10.reduce((sum, item) => sum + item.subtotal, 0);
+
+    const tax8 = Math.floor(subtotal8 * 0.08);
+    const tax10 = Math.floor(subtotal10 * 0.1);
+
+    const totalTax = tax8 + tax10;
+    const subtotal = subtotal8 + subtotal10;
+    const totalAmount = subtotal + totalTax;
 
     // 請求書番号を生成
     const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(customerId).padStart(4, '0')}`;
+
+    // 支払期日を計算（paymentTermsに基づく）
+    const daysToAdd = customer.paymentTerms === '60days' ? 60 : 30;
+    const dueDate = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000);
 
     // 請求書データを準備
     const invoiceData = {
       invoice_number: invoiceNumber,
       invoice_date: new Date().toISOString().split('T')[0],
-      due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30日後
+      due_date: dueDate.toISOString().split('T')[0],
       customer_name: customer.companyName,
       customer_address: customer.deliveryAddress,
       billing_address: customer.billingAddress || customer.deliveryAddress,
+      invoice_registration_number: customer.invoiceRegistrationNumber || '',
+      billing_cycle: customer.billingCycle || 'monthly',
+      billing_day: customer.billingDay || 31,
+      payment_terms: customer.paymentTerms || '30days',
+      invoice_notes: customer.invoiceNotes || '',
       items,
+      subtotal_8: subtotal8,
+      tax_8: tax8,
+      subtotal_10: subtotal10,
+      tax_10: tax10,
+      total_tax: totalTax,
       subtotal,
-      tax_amount: taxAmount,
+      tax_amount: totalTax,
       total_amount: totalAmount,
       notes: `請求期間: ${startDate} 〜 ${endDate}`
     };

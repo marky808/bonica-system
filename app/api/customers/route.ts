@@ -51,7 +51,9 @@ export async function POST(request: NextRequest) {
       specialNotes,
       billingCycle = 'monthly',
       billingDay = 31,
-      paymentTerms = '30days'
+      paymentTerms = '30days',
+      invoiceRegistrationNumber,
+      invoiceNotes
     } = await request.json()
 
     if (!companyName || !contactPerson || !phone || !deliveryAddress || !billingAddress) {
@@ -73,7 +75,9 @@ export async function POST(request: NextRequest) {
         specialNotes,
         billingCycle,
         billingDay,
-        paymentTerms
+        paymentTerms,
+        invoiceRegistrationNumber,
+        invoiceNotes
       }
     })
 

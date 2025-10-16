@@ -30,39 +30,42 @@ model Category {
 }
 
 model Supplier {
-  id                 String     @id @default(cuid())
-  companyName        String     @unique
-  contactPerson      String
-  phone              String
-  address            String
-  paymentTerms       String
-  deliveryConditions String
-  specialNotes       String?
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
-  purchases          Purchase[]
+  id                        String     @id @default(cuid())
+  companyName               String     @unique
+  contactPerson             String
+  phone                     String
+  address                   String
+  paymentTerms              String
+  deliveryConditions        String
+  specialNotes              String?
+  invoiceRegistrationNumber String?
+  createdAt                 DateTime   @default(now())
+  updatedAt                 DateTime   @updatedAt
+  purchases                 Purchase[]
 
   @@map("suppliers")
 }
 
 model Customer {
-  id                     String     @id @default(cuid())
-  companyName            String     @unique
-  contactPerson          String
-  phone                  String
-  deliveryAddress        String
-  billingAddress         String
-  deliveryTimePreference String?
-  specialRequests        String?
-  specialNotes           String?
-  billingCycle           String     @default("monthly")
-  billingDay             Int        @default(31)
-  paymentTerms           String     @default("30days")
-  createdAt              DateTime   @default(now())
-  updatedAt              DateTime   @updatedAt
-  name                   String     @default("")
-  address                String     @default("")
-  deliveries             Delivery[]
+  id                        String     @id @default(cuid())
+  companyName               String     @unique
+  contactPerson             String
+  phone                     String
+  deliveryAddress           String
+  billingAddress            String
+  deliveryTimePreference    String?
+  specialRequests           String?
+  specialNotes              String?
+  billingCycle              String     @default("monthly")
+  billingDay                Int        @default(31)
+  paymentTerms              String     @default("30days")
+  invoiceRegistrationNumber String?
+  invoiceNotes              String?
+  createdAt                 DateTime   @default(now())
+  updatedAt                 DateTime   @updatedAt
+  name                      String     @default("")
+  address                   String     @default("")
+  deliveries                Delivery[]
 
   @@map("customers")
 }
@@ -114,14 +117,17 @@ model Delivery {
 }
 
 model DeliveryItem {
-  id         String   @id @default(cuid())
-  deliveryId String
-  purchaseId String
-  quantity   Float
-  unitPrice  Float
-  amount     Float
-  purchase   Purchase @relation(fields: [purchaseId], references: [id])
-  delivery   Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  id           String    @id @default(cuid())
+  deliveryId   String
+  purchaseId   String
+  quantity     Float
+  unitPrice    Float
+  amount       Float
+  deliveryDate DateTime?
+  unit         String?
+  taxRate      Int       @default(8)
+  purchase     Purchase  @relation(fields: [purchaseId], references: [id])
+  delivery     Delivery  @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
 
   @@map("delivery_items")
 }

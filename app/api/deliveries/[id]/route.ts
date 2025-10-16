@@ -12,6 +12,9 @@ const updateDeliverySchema = z.object({
     purchaseId: z.string(),
     quantity: z.number().min(0.01),
     unitPrice: z.number().min(0),
+    deliveryDate: z.string().optional(),
+    unit: z.string().optional(),
+    taxRate: z.number().default(8),
   })).optional(),
 })
 
@@ -158,6 +161,9 @@ export async function PUT(
               quantity: item.quantity,
               unitPrice: item.unitPrice,
               amount: item.quantity * item.unitPrice,
+              deliveryDate: item.deliveryDate ? new Date(item.deliveryDate) : null,
+              unit: item.unit || null,
+              taxRate: item.taxRate || 8,
             },
           })
 

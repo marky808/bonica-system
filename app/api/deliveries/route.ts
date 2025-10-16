@@ -12,6 +12,9 @@ const createDeliverySchema = z.object({
     purchaseId: z.string().min(1, '仕入れ商品を選択してください'),
     quantity: z.number().min(0.01, '数量を入力してください'),
     unitPrice: z.number().min(0, '単価を入力してください'),
+    deliveryDate: z.string().optional(),
+    unit: z.string().optional(),
+    taxRate: z.number().default(8),
   })).min(1, '納品商品を1つ以上選択してください'),
 })
 
@@ -183,6 +186,9 @@ export async function POST(request: Request) {
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         amount: item.quantity * item.unitPrice,
+        deliveryDate: item.deliveryDate ? new Date(item.deliveryDate) : null,
+        unit: item.unit || null,
+        taxRate: item.taxRate || 8,
       }))
 
       await tx.deliveryItem.createMany({
