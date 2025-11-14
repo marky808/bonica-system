@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     } = data
 
     // Validate required fields
-    if (!productName || !categoryId || !quantity || !unit || !unitPrice || !supplierId || !purchaseDate) {
+    if (!productName || !categoryId || !quantity || !unit || unitPrice === undefined || unitPrice === null || !supplierId || !purchaseDate) {
       return NextResponse.json(
         { error: '必須フィールドが不足しています' },
         { status: 400 }
