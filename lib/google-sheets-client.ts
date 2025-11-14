@@ -566,52 +566,33 @@ class GoogleSheetsClient {
     console.log('📊 Updating delivery sheet:', { spreadsheetId });
 
     const updates = [
-      // 基本情報
+      // 基本情報（行3-6）
       { range: 'B3', values: [[data.delivery_number]] },
       { range: 'B4', values: [[data.delivery_date]] },
       { range: 'B5', values: [[data.customer_name]] },
       { range: 'B6', values: [[data.customer_address || '']] },
-      { range: 'B7', values: [[data.invoice_registration_number || '']] },
-      { range: 'B8', values: [[data.invoice_notes || '']] },
     ];
 
-    // 商品明細（A11から開始）
+    // 商品明細（行11から開始、テンプレートは4列: A=商品名, B=数量, C=単価, D=金額）
     const itemsStartRow = 11;
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
       updates.push(
         { range: `A${row}`, values: [[item.product_name]] },
-        { range: `B${row}`, values: [[item.delivery_date || '']] },
-        { range: `C${row}`, values: [[item.quantity]] },
-        { range: `D${row}`, values: [[item.unit || '']] },
-        { range: `E${row}`, values: [[item.unit_price]] },
-        { range: `F${row}`, values: [[item.tax_rate]] },
-        { range: `G${row}`, values: [[item.subtotal]] },
-        { range: `H${row}`, values: [[item.tax_amount]] },
-        { range: `I${row}`, values: [[item.amount]] }
+        { range: `B${row}`, values: [[item.quantity + (item.unit || '')]] }, // 数量 + 単位
+        { range: `C${row}`, values: [[item.unit_price]] },
+        { range: `D${row}`, values: [[item.amount]] } // 税込金額
       );
     });
 
-    // 税率別集計（商品明細の下 + 2行）
-    const summaryStartRow = itemsStartRow + data.items.length + 2;
+    // 合計（行22のC列）
     updates.push(
-      { range: `B${summaryStartRow}`, values: [['8%対象額']] },
-      { range: `C${summaryStartRow}`, values: [[data.subtotal_8]] },
-      { range: `B${summaryStartRow + 1}`, values: [['8%消費税']] },
-      { range: `C${summaryStartRow + 1}`, values: [[data.tax_8]] },
-      { range: `B${summaryStartRow + 2}`, values: [['10%対象額']] },
-      { range: `C${summaryStartRow + 2}`, values: [[data.subtotal_10]] },
-      { range: `B${summaryStartRow + 3}`, values: [['10%消費税']] },
-      { range: `C${summaryStartRow + 3}`, values: [[data.tax_10]] },
-      { range: `B${summaryStartRow + 4}`, values: [['合計税額']] },
-      { range: `C${summaryStartRow + 4}`, values: [[data.total_tax]] },
-      { range: `B${summaryStartRow + 5}`, values: [['合計金額（税込）']] },
-      { range: `C${summaryStartRow + 5}`, values: [[data.total_amount]] }
+      { range: 'D22', values: [[data.total_amount]] }
     );
 
-    // 備考
+    // 備考（行24以降）
     if (data.notes) {
-      updates.push({ range: `A${summaryStartRow + 8}`, values: [[data.notes]] });
+      updates.push({ range: 'B24', values: [[data.notes]] });
     }
 
     console.log('📊 Batch update ranges:', updates.map(u => u.range));
