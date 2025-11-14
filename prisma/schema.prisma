@@ -70,9 +70,20 @@ model Customer {
   @@map("customers")
 }
 
+model ProductPrefix {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  purchases Purchase[]
+
+  @@map("product_prefixes")
+}
+
 model Purchase {
   id                String         @id @default(cuid())
   productName       String
+  productPrefixId   String?
   categoryId        String
   quantity          Float
   unit              String
@@ -92,6 +103,7 @@ model Purchase {
   deliveryItems     DeliveryItem[]
   supplier          Supplier       @relation(fields: [supplierId], references: [id])
   category          Category       @relation(fields: [categoryId], references: [id])
+  productPrefix     ProductPrefix? @relation(fields: [productPrefixId], references: [id])
 
   @@map("purchases")
 }

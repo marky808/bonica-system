@@ -22,9 +22,17 @@ export interface LoginResponse {
   token: string
 }
 
+export interface ProductPrefix {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Purchase {
   id: string
   productName: string
+  productPrefixId?: string
   categoryId: string
   quantity: number
   unit: string
@@ -48,6 +56,10 @@ export interface Purchase {
     id: string
     companyName: string
     contactPerson: string
+  }
+  productPrefix?: {
+    id: string
+    name: string
   }
 }
 
@@ -362,6 +374,31 @@ class ApiClient {
 
   async deleteCategory(id: string): Promise<ApiResponse<{ success: boolean }>> {
     return this.request<{ success: boolean }>(`/categories/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Product Prefix endpoints
+  async getProductPrefixes(): Promise<ApiResponse<ProductPrefix[]>> {
+    return this.request<ProductPrefix[]>('/product-prefixes')
+  }
+
+  async createProductPrefix(data: { name: string }): Promise<ApiResponse<ProductPrefix>> {
+    return this.request<ProductPrefix>('/product-prefixes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateProductPrefix(id: string, data: { name: string }): Promise<ApiResponse<ProductPrefix>> {
+    return this.request<ProductPrefix>(`/product-prefixes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteProductPrefix(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>(`/product-prefixes/${id}`, {
       method: 'DELETE',
     })
   }
