@@ -25,6 +25,13 @@ export async function POST(request: NextRequest) {
       console.log('🔍 No templateId provided, using environment variable...');
       templateId = process.env.GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID;
 
+      console.log('🔍 DETAILED ENV CHECK:', {
+        raw: process.env.GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID,
+        length: process.env.GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID?.length,
+        hasNewline: process.env.GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID?.includes('\n'),
+        trimmed: process.env.GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID?.trim(),
+      });
+
       if (!templateId) {
         console.log('❌ GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID not set');
         return NextResponse.json(
@@ -35,7 +42,11 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+
+      // Trim the template ID to remove any whitespace or newlines
+      templateId = templateId.trim();
       console.log('✅ Using delivery template from environment:', templateId);
+      console.log('✅ Template ID after trim:', { templateId, length: templateId.length });
     }
 
     // 納品データを取得
@@ -220,6 +231,12 @@ export async function POST(request: NextRequest) {
 
     // Google Sheetsに納品書を作成（詳細ログ付き）
     console.log('📊 Creating delivery sheet with templateId:', templateId);
+    console.log('🔍 Template ID details:', {
+      templateId,
+      type: typeof templateId,
+      length: templateId?.length,
+      charCodes: templateId?.split('').map((c: string) => c.charCodeAt(0)),
+    });
     console.log('🔍 Delivery data before API call:', JSON.stringify(deliveryData, null, 2));
 
     let result;
@@ -235,6 +252,12 @@ export async function POST(request: NextRequest) {
         errorStack: sheetsError instanceof Error ? sheetsError.stack : 'No stack',
         deliveryId: deliveryId,
         templateId: templateId,
+        templateIdDetails: {
+          length: templateId?.length,
+          hasNewline: templateId?.includes('\n'),
+          firstChar: templateId?.charCodeAt(0),
+          lastChar: templateId?.charCodeAt(templateId.length - 1),
+        },
         deliveryDataSnapshot: {
           delivery_number: deliveryData.delivery_number,
           customer_name: deliveryData.customer_name,

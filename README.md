@@ -11,7 +11,16 @@
 BONICA管理システムは、農産物業界向けの包括的な仕入れ・納品・請求管理システムです。
 フロントエンドからバックエンドまでフルスタック実装されており、Google Sheets API連携による納品書・請求書の自動作成とPDF出力機能を提供します。
 
-**最終更新**: 2025年9月9日 - **本格運用可能な状態**
+**最終更新**: 2025-10-23 - **OAuth 2.0認証対応完了**
+
+---
+
+## 🚀 まずはこちら
+
+初めてセットアップする方は、[**QUICKSTART.md**](QUICKSTART.md) から始めてください。
+3ステップで最速セットアップできます。
+
+---
 
 ## 🚀 主要機能
 
@@ -214,12 +223,16 @@ interface Customer {
 - [x] **データ整合性チェック**
 
 #### 5. Google Sheets API連携 ✅
-- [x] **Google Sheets OAuth認証実装済み**
+- [x] **OAuth 2.0認証実装済み** (推奨: ユーザーアカウント直接使用)
+- [x] **サービスアカウント認証** (フォールバック: 制限あり)
 - [x] **納品書作成API** (`/api/google-sheets/create-delivery`)
 - [x] **請求書作成API** (`/api/google-sheets/create-invoice`)
 - [x] **テンプレート管理API** (`/api/google-sheets/templates`)
+- [x] **テンプレートコピー機能** (OAuth 2.0使用時)
 - [x] **ステータス同期処理**
 - [x] **エラーハンドリング完備**
+
+**注意**: サービスアカウントはストレージクォータ=0のため、OAuth 2.0認証の使用を強く推奨します。詳細は [OAUTH_SETUP_GUIDE.md](OAUTH_SETUP_GUIDE.md) を参照してください。
 
 #### 6. レポート・分析機能 ✅
 - [x] **ダッシュボードAPI** (`/api/dashboard/stats`, `/api/dashboard/activities`)
@@ -332,21 +345,30 @@ npm install
 `.env.local` ファイルを作成し、以下を設定：
 
 ```bash
-# データベース設定
-DATABASE_URL="file:./dev.db"
+# データベース設定（Neon PostgreSQL）
+DATABASE_PROVIDER="postgresql"
+DATABASE_URL="postgresql://user:pass@host/db?sslmode=require"
 
 # JWT認証
 JWT_SECRET="your-jwt-secret-key"
+JWT_EXPIRES_IN="7d"
 
-# Google Sheets API設定
-GOOGLE_SHEETS_CLIENT_EMAIL="your-service-account@project.iam.gserviceaccount.com"
-GOOGLE_SHEETS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-GOOGLE_SHEETS_PROJECT_ID="your-project-id"
+# Google Sheets API設定 - OAuth 2.0認証（推奨）
+GOOGLE_OAUTH_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret"
+GOOGLE_OAUTH_REFRESH_TOKEN="your-refresh-token"
 
-# freee API設定（オプション）
-FREEE_CLIENT_ID="your-freee-client-id"
-FREEE_CLIENT_SECRET="your-freee-client-secret"
+# Google Sheetsテンプレート
+GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID="納品書テンプレートID"
+GOOGLE_SHEETS_INVOICE_TEMPLATE_SHEET_ID="請求書テンプレートID"
 ```
+
+💡 **ヒント**: `.env.local.example` ファイルをコピーして使用できます：
+```bash
+cp .env.local.example .env.local
+```
+
+**重要**: OAuth 2.0認証の設定方法は [OAUTH_SETUP_GUIDE.md](OAUTH_SETUP_GUIDE.md) を参照してください。
 
 ### 3. データベースセットアップ
 ```bash
@@ -397,19 +419,68 @@ npm run db:migrate
 
 ### 概要
 BONICA管理システムでは、Google Sheets APIを使用して納品書・請求書を作成します。
-事前に作成したテンプレートスプレッドシートをベースに、自動でデータを挿入してPDF出力可能な帳票を生成します。
+OAuth 2.0認証を使用してユーザーアカウントで直接操作するため、テンプレートのコピーと編集が可能です。
+
+### 認証方式
+
+#### 🔐 OAuth 2.0認証（推奨）
+- ユーザーアカウント（`bonicasystem@gmail.com`等）を直接使用
+- テンプレートファイルのコピーが可能
+- ストレージクォータ制限なし（15GB使用可能）
+- セットアップ方法: [OAUTH_SETUP_GUIDE.md](OAUTH_SETUP_GUIDE.md)
+
+#### 🔑 サービスアカウント認証（フォールバック）
+- Google Cloud Project のサービスアカウントを使用
+- ⚠️ **ストレージクォータ = 0 GB**（Googleの仕様）
+- ファイルコピー・新規作成に制限あり
+- OAuth 2.0が利用できない場合のみ使用
 
 ### 機能一覧
 - **納品書のスプレッドシート作成**: 納品データから自動で納品書を作成
 - **請求書のスプレッドシート作成**: 月次集約データから請求書を作成
+- **テンプレートコピー**: OAuth 2.0使用時、テンプレートを自動コピー
 - **PDF出力機能**: Google SheetsのPDF出力機能を活用
 - **テンプレート管理**: 納品書・請求書用のテンプレート管理
+
+### 🚀 クイックスタート
+
+#### OAuth 2.0認証のセットアップ（推奨）
+```bash
+# 1. 詳細なセットアップガイドを確認
+cat OAUTH_SETUP_GUIDE.md
+
+# 2. Google Cloud ConsoleでOAuthクライアントIDを作成
+
+# 3. リフレッシュトークンを取得
+npx tsx scripts/get-oauth-refresh-token.ts
+
+# 4. テスト実行
+npx tsx scripts/test-oauth-delivery.ts
+```
+
+詳しいセットアップ手順は [OAUTH_SETUP_GUIDE.md](OAUTH_SETUP_GUIDE.md) を参照してください。
+
+### ⚠️ トラブルシューティング
+
+よくある問題:
+- **OAuth 2.0認証エラー**: リフレッシュトークンが期限切れ → 再取得が必要
+- **テンプレートが見つからない**: テンプレートIDの確認、共有設定の確認
+- **権限エラー**: OAuth同意画面のスコープ設定を確認
+
+診断スクリプトで問題を確認:
+```bash
+# OAuth 2.0認証テスト
+npx tsx scripts/test-oauth-delivery.ts
+
+# サービスアカウント診断（レガシー）
+npx tsx scripts/comprehensive-sheets-test.ts
+```
 
 ### セットアップ手順
 
 #### 1. Google Cloud設定
 1. Google Cloud Projectの作成
-2. Google Sheets APIの有効化
+2. Google Sheets APIとGoogle Drive APIの有効化
 3. サービスアカウントの作成
 4. 秘密鍵JSONの取得
 
@@ -421,12 +492,24 @@ BONICA管理システムでは、Google Sheets APIを使用して納品書・請
 GOOGLE_SHEETS_CLIENT_EMAIL="your-service-account@project.iam.gserviceaccount.com"
 GOOGLE_SHEETS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 GOOGLE_SHEETS_PROJECT_ID="your-project-id"
+GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID="納品書テンプレートのファイルID"
+GOOGLE_SHEETS_INVOICE_TEMPLATE_SHEET_ID="請求書テンプレートのファイルID"
 ```
 
-#### 3. テンプレート作成
+**重要**: テンプレートIDは**ファイルID**（URLの`/d/`の後の部分）であり、シートID（`gid=`の後の数字）ではありません。
+
+#### 3. テンプレート作成と共有
 1. 納品書用スプレッドシートテンプレートの作成
 2. 請求書用スプレッドシートテンプレートの作成
-3. テンプレートIDをデータベースに登録
+3. **両方のテンプレートをサービスアカウントと共有**
+   - サービスアカウントのメールアドレスを「編集者」として追加
+   - 共有設定を忘れると「File not found」エラーが発生します
+4. テンプレートIDを環境変数に設定
+
+テンプレートIDの確認:
+```bash
+npx tsx scripts/verify-template-ids.ts
+```
 
 ### 使用方法
 
@@ -503,6 +586,69 @@ GOOGLE_SHEETS_PROJECT_ID="your-project-id"
 - **コードベース**: フロントエンド + バックエンド統合
 - **テストカバレッジ**: 主要API・ビジネスロジック
 - **運用準備度**: ✅ **本格運用可能**
+
+## 🔧 最新の改善内容（2025-10-23）
+
+### Google Sheets連携の問題診断と改善
+
+#### 発見された問題
+1. **ストレージ容量超過エラー**: サービスアカウントのGoogle Drive容量が上限に達していた
+2. **請求書テンプレートアクセス不可**: 請求書テンプレートがサービスアカウントと共有されていなかった
+3. **エラーメッセージが不明確**: 具体的な解決策が示されていなかった
+
+#### 実装した改善策
+
+1. **エラーハンドリングの強化**
+   - ストレージ容量超過エラーの詳細検出
+   - ファイル未共有エラーの明確な識別
+   - ユーザーフレンドリーなエラーメッセージ
+
+2. **Driveスコープの拡張**
+   ```typescript
+   // 変更前: 'https://www.googleapis.com/auth/drive.file'
+   // 変更後: 'https://www.googleapis.com/auth/drive'
+   ```
+
+3. **詳細なログ出力**
+   - ファイルコピー時の詳細情報
+   - エラー発生時のデバッグ情報
+   - 各ステップの成功/失敗状態
+
+4. **診断ツールの追加**
+   - `scripts/comprehensive-sheets-test.ts`: 総合診断スクリプト
+   - `scripts/diagnose-sheets-issue.ts`: 詳細診断スクリプト
+   - `scripts/verify-template-ids.ts`: テンプレートID確認スクリプト
+   - `scripts/cleanup-service-account-drive.ts`: ストレージクリーンアップスクリプト
+
+5. **ドキュメント整備**
+   - [GOOGLE_SHEETS_SETUP_GUIDE.md](./GOOGLE_SHEETS_SETUP_GUIDE.md): 詳細なセットアップガイド
+   - トラブルシューティング手順の明確化
+   - よくある問題と解決策の文書化
+
+#### 解決手順
+
+ユーザーが実行すべき手順:
+
+1. **請求書テンプレートを共有**
+   ```
+   請求書スプレッドシートを開き、サービスアカウント
+   (bonica-sheets@bonica-management-system.iam.gserviceaccount.com)
+   に「編集者」権限を付与
+   ```
+
+2. **ストレージ容量問題の解決**
+   以下のいずれかを実施:
+   - 方法A: Google Workspace の共有ドライブを使用（推奨）
+   - 方法B: 古いファイルを定期的に削除
+   - 方法C: ファイル作成時に所有権を移譲
+   - 方法D: ストレージをアップグレード
+
+3. **動作確認**
+   ```bash
+   npx tsx scripts/comprehensive-sheets-test.ts
+   ```
+
+詳細は [GOOGLE_SHEETS_SETUP_GUIDE.md](./GOOGLE_SHEETS_SETUP_GUIDE.md) を参照してください。
 
 ---
 
