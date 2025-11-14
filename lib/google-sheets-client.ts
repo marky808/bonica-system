@@ -288,6 +288,44 @@ class GoogleSheetsClient {
             GoogleSheetsErrorCode.UNKNOWN_ERROR
           );
         }
+
+        // シート名を変更（納品先名_日付）
+        try {
+          const sheetName = `${data.customer_name}_${data.delivery_date}`;
+          console.log('📝 Renaming sheet to:', sheetName);
+
+          // Get the first sheet ID
+          const spreadsheet = await this.sheets.spreadsheets.get({
+            spreadsheetId: newFileId,
+          });
+
+          const firstSheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId;
+
+          if (firstSheetId !== undefined) {
+            await this.sheets.spreadsheets.batchUpdate({
+              spreadsheetId: newFileId,
+              requestBody: {
+                requests: [
+                  {
+                    updateSheetProperties: {
+                      properties: {
+                        sheetId: firstSheetId,
+                        title: sheetName,
+                      },
+                      fields: 'title',
+                    },
+                  },
+                ],
+              },
+            });
+            console.log('✅ Sheet renamed successfully:', sheetName);
+          } else {
+            console.warn('⚠️ Could not find sheet ID for renaming');
+          }
+        } catch (renameError: any) {
+          console.error('❌ Sheet rename failed (non-critical):', renameError);
+          // シート名の変更は失敗しても続行
+        }
       }
       // サービスアカウント認証の場合は空のスプレッドシートを作成
       else {
