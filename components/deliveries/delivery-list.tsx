@@ -152,6 +152,13 @@ export function DeliveryList({
     return delivery.customer?.companyName || "不明"
   }
 
+  const getDisplayProductName = (item: any) => {
+    if (item.purchase?.productPrefix?.name) {
+      return `${item.purchase.productPrefix.name}${item.purchase.productName}`
+    }
+    return item.purchase?.productName || "不明"
+  }
+
   const handleSort = (field: keyof Delivery) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc")
@@ -165,9 +172,10 @@ export function DeliveryList({
     const matchesSearch =
       searchQuery === "" ||
       getCustomerName(delivery).toLowerCase().includes(searchQuery.toLowerCase()) ||
-      delivery.items.some(item => 
-        item.purchase.productName.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      delivery.items.some(item => {
+        const displayName = getDisplayProductName(item)
+        return displayName.toLowerCase().includes(searchQuery.toLowerCase())
+      })
 
     const matchesCustomer = customerFilter === "all" || delivery.customerId === customerFilter
     const matchesStatus = statusFilter === "all" || delivery.status === statusFilter
@@ -338,7 +346,7 @@ export function DeliveryList({
                     <div className="flex-1">
                       <h3 className="font-medium text-lg">{getCustomerName(delivery)}</h3>
                       <p className="text-sm text-muted-foreground">
-                        {delivery.items.length}品目 - {delivery.items.map(item => item.purchase.productName).join(', ')}
+                        {delivery.items.length}品目 - {delivery.items.map(item => getDisplayProductName(item)).join(', ')}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">{getStatusBadge(delivery.status)}</div>
@@ -453,7 +461,7 @@ export function DeliveryList({
                       <div className="space-y-1">
                         {delivery.items.slice(0, 2).map((item, index) => (
                           <div key={index} className="text-sm">
-                            {item.purchase.productName} ({item.quantity} {item.purchase.unit})
+                            {getDisplayProductName(item)} ({item.quantity} {item.purchase.unit})
                           </div>
                         ))}
                         {delivery.items.length > 2 && (

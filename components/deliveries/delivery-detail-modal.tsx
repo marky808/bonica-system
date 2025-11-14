@@ -103,10 +103,17 @@ export function DeliveryDetailModal({
     }
   }
 
+  const getDisplayProductName = (item: any) => {
+    if (item.purchase?.productPrefix?.name) {
+      return `${item.purchase.productPrefix.name}${item.purchase.productName}`
+    }
+    return item.purchase?.productName || "不明"
+  }
+
   const getTotalQuantityByProduct = () => {
     const productQuantities = new Map()
     delivery.items.forEach(item => {
-      const key = item.purchase.productName
+      const key = getDisplayProductName(item)
       if (productQuantities.has(key)) {
         productQuantities.set(key, productQuantities.get(key) + item.quantity)
       } else {
@@ -200,7 +207,7 @@ export function DeliveryDetailModal({
                     <div className="flex items-start justify-between py-3">
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center gap-2">
-                          <h4 className="font-medium text-lg">{item.purchase.productName}</h4>
+                          <h4 className="font-medium text-lg">{getDisplayProductName(item)}</h4>
                           <Badge variant="outline">{item.purchase.category?.name}</Badge>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">

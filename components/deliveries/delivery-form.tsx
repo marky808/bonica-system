@@ -76,6 +76,14 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
     name: "items",
   })
 
+  // Helper function to get display product name with prefix
+  const getDisplayProductName = (purchase: Purchase) => {
+    if (purchase.productPrefix?.name) {
+      return `${purchase.productPrefix.name}${purchase.productName}`
+    }
+    return purchase.productName
+  }
+
   useEffect(() => {
     if (isComposing) return
 
@@ -135,11 +143,12 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
     }
 
     const allPurchasesArray = Array.isArray(allPurchases) ? allPurchases : []
-    const filtered = allPurchasesArray.filter(purchase =>
-      purchase.productName.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-      purchase.category?.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-      purchase.supplier?.companyName.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
-    )
+    const filtered = allPurchasesArray.filter(purchase => {
+      const displayName = getDisplayProductName(purchase)
+      return displayName.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        purchase.category?.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        purchase.supplier?.companyName.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+    })
 
     setAvailablePurchases(filtered)
   }, [debouncedSearchQuery, allPurchases])
@@ -150,7 +159,8 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
     for (const [index, item] of data.items.entries()) {
       const purchase = getPurchaseInfo(item.purchaseId)
       if (purchase && item.quantity > purchase.remainingQuantity) {
-        stockErrors.push(`商品${index + 1}: ${purchase.productName} の在庫が不足しています。在庫: ${purchase.remainingQuantity}${purchase.unit}, 要求: ${item.quantity}${purchase.unit}`)
+        const displayName = getDisplayProductName(purchase)
+        stockErrors.push(`商品${index + 1}: ${displayName} の在庫が不足しています。在庫: ${purchase.remainingQuantity}${purchase.unit}, 要求: ${item.quantity}${purchase.unit}`)
       }
     }
 
@@ -359,7 +369,7 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                             }}
                           >
                             <div className="flex items-center justify-between">
-                              <div className="font-medium text-gray-900">{purchase.productName}</div>
+                              <div className="font-medium text-gray-900">{getDisplayProductName(purchase)}</div>
                               {isSelected && (
                                 <div className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
                                   選択済み
@@ -448,7 +458,7 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                                 {Array.isArray(availablePurchases) && availablePurchases.map((purchase) => (
                                   <SelectItem key={purchase.id} value={purchase.id}>
                                     <div className="flex flex-col text-left">
-                                      <span className="font-medium">{purchase.productName}</span>
+                                      <span className="font-medium">{getDisplayProductName(purchase)}</span>
                                       <span className="text-sm text-muted-foreground">
                                         在庫: {purchase.remainingQuantity} {purchase.unit}
                                       </span>

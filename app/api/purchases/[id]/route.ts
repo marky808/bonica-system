@@ -14,7 +14,8 @@ export async function GET(
       where: { id: params.id },
       include: {
         category: true,
-        supplier: true
+        supplier: true,
+        productPrefix: true
       }
     })
 
@@ -47,6 +48,7 @@ export async function PUT(
     const data = await request.json()
     const {
       productName,
+      productPrefixId,
       categoryId,
       quantity,
       unit,
@@ -106,6 +108,7 @@ export async function PUT(
       where: { id: params.id },
       data: {
         ...(productName && { productName }),
+        ...(productPrefixId !== undefined && { productPrefixId }),
         ...(categoryId && { categoryId }),
         ...(quantity && { quantity: parseFloat(quantity), remainingQuantity }),
         ...(unit && { unit }),
@@ -121,7 +124,8 @@ export async function PUT(
       },
       include: {
         category: true,
-        supplier: true
+        supplier: true,
+        productPrefix: true
       }
     })
 

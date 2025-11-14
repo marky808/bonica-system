@@ -14,10 +14,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Plus, X, Loader2 } from "lucide-react"
-import { apiClient, type Category, type Supplier, type Purchase } from "@/lib/api"
+import { apiClient, type Category, type Supplier, type Purchase, type ProductPrefix } from "@/lib/api"
 
 const purchaseSchema = z.object({
   productName: z.string().min(1, "商品名を入力してください"),
+  productPrefixId: z.string().optional(),
   categoryId: z.string().min(1, "カテゴリーを選択してください"),
   quantity: z.number().min(0.01, "数量を入力してください"),
   unit: z.string().min(1, "単位を入力してください"),
@@ -57,6 +58,7 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
   const [unitSuggestionsVisible, setUnitSuggestionsVisible] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [productPrefixes, setProductPrefixes] = useState<ProductPrefix[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -64,23 +66,28 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
     const loadData = async () => {
       setLoading(true)
       setError('')
-      
+
       try {
-        const [categoriesRes, suppliersRes] = await Promise.all([
+        const [categoriesRes, suppliersRes, prefixesRes] = await Promise.all([
           apiClient.getCategories(),
-          apiClient.getSuppliers()
+          apiClient.getSuppliers(),
+          apiClient.getProductPrefixes()
         ])
-        
+
         if (categoriesRes.data) {
           setCategories(categoriesRes.data)
         } else {
           setError('カテゴリーの読み込みに失敗しました')
         }
-        
+
         if (suppliersRes.data) {
           setSuppliers(suppliersRes.data)
         } else {
           setError('仕入れ先の読み込みに失敗しました')
+        }
+
+        if (prefixesRes.data) {
+          setProductPrefixes(prefixesRes.data)
         }
       } catch (err) {
         setError('データの読み込みに失敗しました')
@@ -88,7 +95,7 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
         setLoading(false)
       }
     }
-    
+
     loadData()
   }, [])
 
@@ -96,6 +103,7 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
     resolver: zodResolver(purchaseSchema),
     defaultValues: {
       productName: initialData?.productName || "",
+      productPrefixId: initialData?.productPrefixId || "",
       categoryId: initialData?.categoryId || "",
       quantity: initialData?.quantity || undefined,
       unit: initialData?.unit || "",
@@ -104,10 +112,10 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
       price: initialData?.price || undefined,
       taxType: (initialData?.taxType as "TAXABLE" | "TAX_FREE") || "TAXABLE",
       supplierId: initialData?.supplier?.id || "",
-      purchaseDate: initialData?.purchaseDate 
+      purchaseDate: initialData?.purchaseDate
         ? new Date(initialData.purchaseDate).toISOString().split("T")[0]
         : new Date().toISOString().split("T")[0],
-      expiryDate: initialData?.expiryDate 
+      expiryDate: initialData?.expiryDate
         ? new Date(initialData.expiryDate).toISOString().split("T")[0]
         : "",
       deliveryFee: initialData?.deliveryFee || "",
@@ -123,6 +131,7 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
   const handleClear = () => {
     form.reset({
       productName: "",
+      productPrefixId: "",
       categoryId: "",
       quantity: undefined,
       unit: "",
@@ -213,6 +222,34 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
                         )}
                       </div>
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* プレフィックス選択 */}
+              <FormField
+                control={form.control}
+                name="productPrefixId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>商品プレフィックス</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger className="h-12">
+                          <SelectValue placeholder="プレフィックスなし" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">なし</SelectItem>
+                        {productPrefixes.map((prefix) => (
+                          <SelectItem key={prefix.id} value={prefix.id}>
+                            {prefix.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>商品名の前に付ける接頭辞（例：鈴木さんの）</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

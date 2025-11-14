@@ -147,6 +147,13 @@ export function PurchaseList({ purchases, onEdit, onDelete, onView, loading = fa
     return purchase.supplier?.companyName || "不明"
   }
 
+  const getDisplayProductName = (purchase: Purchase) => {
+    if (purchase.productPrefix?.name) {
+      return `${purchase.productPrefix.name}${purchase.productName}`
+    }
+    return purchase.productName
+  }
+
   const handleSort = (field: keyof Purchase) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc")
@@ -346,7 +353,7 @@ export function PurchaseList({ purchases, onEdit, onDelete, onView, loading = fa
                 <div className="space-y-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h3 className="font-medium text-lg">{purchase.productName}</h3>
+                      <h3 className="font-medium text-lg">{getDisplayProductName(purchase)}</h3>
                       <p className="text-sm text-muted-foreground">{getCategoryName(purchase)}</p>
                     </div>
                     <div className="flex items-center gap-2">{getStatusBadge(purchase.status)}</div>
@@ -432,7 +439,7 @@ export function PurchaseList({ purchases, onEdit, onDelete, onView, loading = fa
                 {paginatedPurchases.map((purchase) => (
                   <TableRow key={purchase.id}>
                     <TableCell>{new Date(purchase.purchaseDate).toLocaleDateString('ja-JP')}</TableCell>
-                    <TableCell className="font-medium">{purchase.productName}</TableCell>
+                    <TableCell className="font-medium">{getDisplayProductName(purchase)}</TableCell>
                     <TableCell>{getCategoryName(purchase)}</TableCell>
                     <TableCell>
                       {purchase.quantity} {purchase.unit}

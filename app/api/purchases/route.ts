@@ -57,7 +57,8 @@ export async function GET(request: NextRequest) {
         where,
         include: {
           category: true,
-          supplier: true
+          supplier: true,
+          productPrefix: true
         },
         orderBy: { purchaseDate: 'desc' },
         skip,
@@ -93,6 +94,7 @@ export async function POST(request: NextRequest) {
     const data = await request.json()
     const {
       productName,
+      productPrefixId,
       categoryId,
       quantity,
       unit,
@@ -137,6 +139,7 @@ export async function POST(request: NextRequest) {
     const purchase = await prisma.purchase.create({
       data: {
         productName,
+        productPrefixId: productPrefixId || null,
         categoryId,
         quantity: parseFloat(quantity),
         unit,
@@ -153,7 +156,8 @@ export async function POST(request: NextRequest) {
       },
       include: {
         category: true,
-        supplier: true
+        supplier: true,
+        productPrefix: true
       }
     })
 

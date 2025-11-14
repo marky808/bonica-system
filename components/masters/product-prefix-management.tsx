@@ -89,6 +89,11 @@ export function ProductPrefixManagement({ onPrefixUpdated }: ProductPrefixManage
       const response = await apiClient.deleteProductPrefix(id)
       console.log('✅ Delete response:', response)
 
+      // レスポンスのエラーチェック
+      if (response.error) {
+        throw new Error(response.error)
+      }
+
       await loadPrefixes()
       onPrefixUpdated?.()
       alert('プレフィックスを削除しました')

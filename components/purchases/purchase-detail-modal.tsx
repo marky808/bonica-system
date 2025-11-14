@@ -71,6 +71,13 @@ export function PurchaseDetailModal({
     }
   }
 
+  const getDisplayProductName = () => {
+    if (purchase.productPrefix?.name) {
+      return `${purchase.productPrefix.name}${purchase.productName}`
+    }
+    return purchase.productName
+  }
+
   const handleEdit = () => {
     onEdit(purchase)
     onClose()
@@ -106,7 +113,7 @@ export function PurchaseDetailModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">商品名</label>
-                  <p className="text-lg font-semibold">{purchase.productName}</p>
+                  <p className="text-lg font-semibold">{getDisplayProductName()}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">カテゴリー</label>

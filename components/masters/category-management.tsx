@@ -89,6 +89,11 @@ export function CategoryManagement({ onCategoryUpdated }: CategoryManagementProp
       const response = await apiClient.deleteCategory(id)
       console.log('✅ Delete response:', response)
 
+      // レスポンスのエラーチェック
+      if (response.error) {
+        throw new Error(response.error)
+      }
+
       await loadCategories()
       onCategoryUpdated?.()
       alert('カテゴリーを削除しました')
