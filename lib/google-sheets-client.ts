@@ -586,9 +586,9 @@ class GoogleSheetsClient {
       );
     });
 
-    // 税率別集計（表の右側、列G-Hに配置）
-    // 商品明細の開始行と同じ位置から表示
-    const summaryStartRow = itemsStartRow;
+    // 税率別集計（商品明細の下に配置）
+    // 商品明細の最終行 + 2行後から開始
+    const summaryStartRow = itemsStartRow + data.items.length + 2;
 
     // 8%と10%の両方がある場合のみ詳細表示
     const has8Percent = data.subtotal_8 > 0;
@@ -598,26 +598,26 @@ class GoogleSheetsClient {
 
     if (has8Percent) {
       updates.push(
-        { range: `G${summaryRow}`, values: [['8%対象額']] },
-        { range: `H${summaryRow}`, values: [[data.subtotal_8]] }
+        { range: `D${summaryRow}`, values: [['8%対象額']] },
+        { range: `E${summaryRow}`, values: [[data.subtotal_8]] }
       );
       summaryRow++;
       updates.push(
-        { range: `G${summaryRow}`, values: [['8%消費税']] },
-        { range: `H${summaryRow}`, values: [[data.tax_8]] }
+        { range: `D${summaryRow}`, values: [['8%消費税']] },
+        { range: `E${summaryRow}`, values: [[data.tax_8]] }
       );
       summaryRow++;
     }
 
     if (has10Percent) {
       updates.push(
-        { range: `G${summaryRow}`, values: [['10%対象額']] },
-        { range: `H${summaryRow}`, values: [[data.subtotal_10]] }
+        { range: `D${summaryRow}`, values: [['10%対象額']] },
+        { range: `E${summaryRow}`, values: [[data.subtotal_10]] }
       );
       summaryRow++;
       updates.push(
-        { range: `G${summaryRow}`, values: [['10%消費税']] },
-        { range: `H${summaryRow}`, values: [[data.tax_10]] }
+        { range: `D${summaryRow}`, values: [['10%消費税']] },
+        { range: `E${summaryRow}`, values: [[data.tax_10]] }
       );
       summaryRow++;
     }
@@ -628,26 +628,26 @@ class GoogleSheetsClient {
     // 小計（税抜）
     const subtotalBeforeTax = data.subtotal_8 + data.subtotal_10;
     updates.push(
-      { range: `G${summaryRow}`, values: [['小計（税抜）']] },
-      { range: `H${summaryRow}`, values: [[subtotalBeforeTax]] }
+      { range: `D${summaryRow}`, values: [['小計（税抜）']] },
+      { range: `E${summaryRow}`, values: [[subtotalBeforeTax]] }
     );
     summaryRow++;
 
     // 消費税合計
     updates.push(
-      { range: `G${summaryRow}`, values: [['消費税']] },
-      { range: `H${summaryRow}`, values: [[data.total_tax]] }
+      { range: `D${summaryRow}`, values: [['消費税']] },
+      { range: `E${summaryRow}`, values: [[data.total_tax]] }
     );
     summaryRow++;
 
     // 合計（税込）
     updates.push(
-      { range: `G${summaryRow}`, values: [['合計（税込）']] },
-      { range: `H${summaryRow}`, values: [[data.total_amount]] }
+      { range: `D${summaryRow}`, values: [['合計（税込）']] },
+      { range: `E${summaryRow}`, values: [[data.total_amount]] }
     );
 
-    // 備考（商品明細の下 + 2行、A列に配置）
-    const notesRow = itemsStartRow + data.items.length + 2;
+    // 備考（集計の下 + 2行、A列に配置）
+    const notesRow = summaryRow + 2;
     if (data.notes) {
       updates.push({ range: `A${notesRow}`, values: [['備考:']] });
       updates.push({ range: `B${notesRow}`, values: [[data.notes]] });
