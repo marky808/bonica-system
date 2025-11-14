@@ -380,7 +380,32 @@ export default function DeliveriesPage() {
         
         {success && (
           <Alert className="border-green-500 bg-green-50">
-            <AlertDescription className="text-green-800">{success}</AlertDescription>
+            <AlertDescription className="text-green-800">
+              {(() => {
+                // URLを含む場合はリンク化
+                const urlMatch = success.match(/(https:\/\/[^\s]+)/);
+                if (urlMatch) {
+                  const url = urlMatch[1];
+                  const beforeUrl = success.substring(0, success.indexOf(url));
+                  const afterUrl = success.substring(success.indexOf(url) + url.length);
+                  return (
+                    <>
+                      {beforeUrl}
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline font-semibold hover:text-green-900 ml-1"
+                      >
+                        こちらをクリックして開く
+                      </a>
+                      {afterUrl}
+                    </>
+                  );
+                }
+                return success;
+              })()}
+            </AlertDescription>
           </Alert>
         )}
 
