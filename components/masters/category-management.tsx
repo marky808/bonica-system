@@ -77,18 +77,30 @@ export function CategoryManagement({ onCategoryUpdated }: CategoryManagementProp
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("このカテゴリーを削除してもよろしいですか？")) {
+    const category = categories.find(c => c.id === id)
+    if (!category) return
+
+    if (!confirm(`「${category.name}」を削除してもよろしいですか？\n\n※このカテゴリーが仕入れデータで使用されている場合は削除できません。`)) {
       return
     }
 
     try {
-      await apiClient.deleteCategory(id)
+      console.log('🗑️ Deleting category:', id)
+      const response = await apiClient.deleteCategory(id)
+      console.log('✅ Delete response:', response)
+
       await loadCategories()
       onCategoryUpdated?.()
       alert('カテゴリーを削除しました')
     } catch (err: any) {
-      console.error('Failed to delete category:', err)
-      alert(err.message || 'カテゴリーの削除に失敗しました')
+      console.error('❌ Failed to delete category:', err)
+
+      // エラーメッセージを詳しく表示
+      if (err.message?.includes('使用されている')) {
+        alert(`削除できません\n\n「${category.name}」は仕入れデータで使用されているため削除できません。\n先に関連する仕入れデータを削除または別のカテゴリーに変更してください。`)
+      } else {
+        alert(`削除に失敗しました\n\n${err.message || 'カテゴリーの削除に失敗しました'}`)
+      }
     }
   }
 
