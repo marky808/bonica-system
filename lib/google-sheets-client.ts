@@ -55,6 +55,25 @@ interface DeliveryData {
   notes?: string;
 }
 
+// 新しい9列構造のテンプレート用（Phase 1で作成したテンプレート）
+interface DeliveryDataV2 {
+  delivery_number: string;
+  delivery_date: string;
+  customer_name: string;
+  customer_address?: string;
+  items: {
+    date: string;              // A列: 日付 (MM/DD形式)
+    product_name: string;      // B列: 品名
+    unit_price: number;        // C列: 単価
+    quantity: number;          // D列: 数量
+    unit: string;              // E列: 単位 (kg, 袋, 箱など)
+    tax_rate: string;          // F列: 税率 ("8%" or "10%")
+    // G列: 税抜金額 (スプレッドシートで自動計算: =C*D)
+    // H列: 消費税 (スプレッドシートで自動計算: =G*税率)
+    notes?: string;            // I列: 備考
+  }[];
+}
+
 interface InvoiceData {
   invoice_number: string;
   invoice_date: string;
@@ -85,6 +104,25 @@ interface InvoiceData {
   tax_amount: number;
   total_amount: number;
   notes?: string;
+}
+
+// 新しい9列構造のテンプレート用（Phase 1で作成したテンプレート）
+interface InvoiceDataV2 {
+  invoice_number: string;
+  invoice_date: string;
+  customer_name: string;
+  customer_address?: string;
+  items: {
+    date: string;              // A列: 日付 (MM/DD形式)
+    product_name: string;      // B列: 品名
+    unit_price: number;        // C列: 単価
+    quantity: number;          // D列: 数量
+    unit: string;              // E列: 単位 (kg, 袋, 箱など)
+    tax_rate: string;          // F列: 税率 ("8%" or "10%")
+    // G列: 税抜金額 (スプレッドシートで自動計算: =C*D)
+    // H列: 消費税 (スプレッドシートで自動計算: =G*税率)
+    notes?: string;            // I列: 備考
+  }[];
 }
 
 class GoogleSheetsClient {
@@ -785,6 +823,242 @@ class GoogleSheetsClient {
       );
     }
   }
+
+  // ========================================
+  // 新しい9列構造テンプレート用のメソッド（V2）
+  // ========================================
+
+  /**
+   * 新しい9列構造の納品書テンプレートを使用してシートを作成
+   */
+  async createDeliverySheetV2(data: DeliveryDataV2, templateFileId: string): Promise<{ sheetId: string; url: string }> {
+    try {
+      console.log('🔍 createDeliverySheetV2 called with:', {
+        templateFileId,
+        authType: this.authType,
+      });
+
+      this.validateDeliveryDataV2(data);
+
+      console.log(`📊 Creating delivery sheet V2 from template (${this.authType}):`, templateFileId);
+
+      const newFileName = `納品書_${data.delivery_number}_${data.customer_name}_${new Date().toISOString().slice(0, 10)}`;
+      let newFileId: string;
+
+      // OAuth 2.0認証でテンプレートをコピー
+      if (this.authType === 'oauth2') {
+        console.log('📋 Using OAuth2 - copying template file');
+
+        const drive = google.drive({ version: 'v3', auth: this.auth });
+
+        const copiedFile = await drive.files.copy({
+          fileId: templateFileId,
+          requestBody: {
+            name: newFileName,
+          },
+        });
+
+        newFileId = copiedFile.data.id!;
+        console.log('✅ Template copied successfully:', { newFileId, newFileName });
+
+        // コピーしたファイルにデータを更新
+        await this.updateDeliverySheetV2(newFileId, data);
+        console.log('✅ Sheet data updated successfully');
+      } else {
+        throw new GoogleSheetsError(
+          '新しいテンプレート（V2）はOAuth 2.0認証が必要です',
+          undefined,
+          GoogleSheetsErrorCode.AUTHENTICATION_FAILED
+        );
+      }
+
+      const url = `https://docs.google.com/spreadsheets/d/${newFileId}`;
+      console.log('🎉 Delivery sheet V2 creation completed:', { sheetId: newFileId, url });
+
+      return { sheetId: newFileId, url };
+    } catch (error) {
+      console.error('❌ Error in createDeliverySheetV2:', error);
+
+      if (error instanceof GoogleSheetsError) {
+        throw error;
+      }
+
+      this.handleGoogleAPIError(error, 'createDeliverySheetV2');
+    }
+  }
+
+  private validateDeliveryDataV2(data: DeliveryDataV2): void {
+    if (!data.delivery_number) {
+      throw new GoogleSheetsError('納品番号が必要です', undefined, GoogleSheetsErrorCode.INVALID_DATA);
+    }
+    if (!data.customer_name) {
+      throw new GoogleSheetsError('顧客名が必要です', undefined, GoogleSheetsErrorCode.INVALID_DATA);
+    }
+    if (!data.items || data.items.length === 0) {
+      throw new GoogleSheetsError('納品アイテムが必要です', undefined, GoogleSheetsErrorCode.INVALID_DATA);
+    }
+  }
+
+  /**
+   * 新しい9列構造の納品書テンプレートにデータを投入
+   */
+  private async updateDeliverySheetV2(spreadsheetId: string, data: DeliveryDataV2) {
+    console.log('📊 Updating delivery sheet V2:', { spreadsheetId });
+
+    const updates: Array<{ range: string; values: any[][] }> = [];
+
+    // ヘッダー情報（7-8行目）
+    updates.push(
+      { range: '納品書テンプレート!F7', values: [[`${data.customer_name} 御中`]] },
+      { range: '納品書テンプレート!F8', values: [[`納品日: ${data.delivery_date}`]] },
+      { range: '納品書テンプレート!H8', values: [[`納品書番号: ${data.delivery_number}`]] }
+    );
+
+    // 明細データ（11行目から開始、9列構造）
+    const itemsStartRow = 11;
+    data.items.forEach((item, index) => {
+      const row = itemsStartRow + index;
+      updates.push(
+        { range: `納品書テンプレート!A${row}`, values: [[item.date]] },           // 日付
+        { range: `納品書テンプレート!B${row}`, values: [[item.product_name]] },   // 品名
+        { range: `納品書テンプレート!C${row}`, values: [[item.unit_price]] },     // 単価
+        { range: `納品書テンプレート!D${row}`, values: [[item.quantity]] },       // 数量
+        { range: `納品書テンプレート!E${row}`, values: [[item.unit]] },           // 単位
+        { range: `納品書テンプレート!F${row}`, values: [[item.tax_rate]] },       // 税率
+        // G列（税抜金額）とH列（消費税）はスプレッドシートの数式で自動計算
+        { range: `納品書テンプレート!I${row}`, values: [[item.notes || '']] }     // 備考
+      );
+    });
+
+    console.log('📊 Batch update ranges V2:', updates.map(u => u.range));
+
+    // 一括更新
+    await this.sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: spreadsheetId,
+      requestBody: {
+        valueInputOption: 'USER_ENTERED',  // 数式を解釈させるため
+        data: updates
+      }
+    });
+
+    console.log('✅ Delivery sheet V2 updated successfully');
+  }
+
+  /**
+   * 新しい9列構造の請求書テンプレートを使用してシートを作成
+   */
+  async createInvoiceSheetV2(data: InvoiceDataV2, templateFileId: string): Promise<{ sheetId: string; url: string }> {
+    try {
+      console.log('🔍 createInvoiceSheetV2 called with:', {
+        templateFileId,
+        authType: this.authType,
+      });
+
+      this.validateInvoiceDataV2(data);
+
+      console.log(`📊 Creating invoice sheet V2 from template (${this.authType}):`, templateFileId);
+
+      const newFileName = `請求書_${data.invoice_number}_${data.customer_name}_${new Date().toISOString().slice(0, 10)}`;
+      let newFileId: string;
+
+      // OAuth 2.0認証でテンプレートをコピー
+      if (this.authType === 'oauth2') {
+        console.log('📋 Using OAuth2 - copying template file');
+
+        const drive = google.drive({ version: 'v3', auth: this.auth });
+
+        const copiedFile = await drive.files.copy({
+          fileId: templateFileId,
+          requestBody: {
+            name: newFileName,
+          },
+        });
+
+        newFileId = copiedFile.data.id!;
+        console.log('✅ Template copied successfully:', { newFileId, newFileName });
+
+        // コピーしたファイルにデータを更新
+        await this.updateInvoiceSheetV2(newFileId, data);
+        console.log('✅ Invoice sheet V2 data updated successfully');
+      } else {
+        throw new GoogleSheetsError(
+          '新しいテンプレート（V2）はOAuth 2.0認証が必要です',
+          undefined,
+          GoogleSheetsErrorCode.AUTHENTICATION_FAILED
+        );
+      }
+
+      const url = `https://docs.google.com/spreadsheets/d/${newFileId}`;
+      console.log('🎉 Invoice sheet V2 creation completed:', { sheetId: newFileId, url });
+
+      return { sheetId: newFileId, url };
+    } catch (error) {
+      console.error('❌ Error in createInvoiceSheetV2:', error);
+
+      if (error instanceof GoogleSheetsError) {
+        throw error;
+      }
+
+      this.handleGoogleAPIError(error, 'createInvoiceSheetV2');
+    }
+  }
+
+  private validateInvoiceDataV2(data: InvoiceDataV2): void {
+    if (!data.invoice_number) {
+      throw new GoogleSheetsError('請求書番号が必要です', undefined, GoogleSheetsErrorCode.INVALID_DATA);
+    }
+    if (!data.customer_name) {
+      throw new GoogleSheetsError('顧客名が必要です', undefined, GoogleSheetsErrorCode.INVALID_DATA);
+    }
+    if (!data.items || data.items.length === 0) {
+      throw new GoogleSheetsError('請求アイテムが必要です', undefined, GoogleSheetsErrorCode.INVALID_DATA);
+    }
+  }
+
+  /**
+   * 新しい9列構造の請求書テンプレートにデータを投入
+   */
+  private async updateInvoiceSheetV2(spreadsheetId: string, data: InvoiceDataV2) {
+    console.log('📊 Updating invoice sheet V2:', { spreadsheetId });
+
+    const updates: Array<{ range: string; values: any[][] }> = [];
+
+    // ヘッダー情報（7-8行目）
+    updates.push(
+      { range: '請求書テンプレート!F7', values: [[`${data.customer_name} 御中`]] },
+      { range: '請求書テンプレート!F8', values: [[`請求日: ${data.invoice_date}`]] },
+      { range: '請求書テンプレート!H8', values: [[`請求番号: ${data.invoice_number}`]] }
+    );
+
+    // 明細データ（11行目から開始、9列構造）
+    const itemsStartRow = 11;
+    data.items.forEach((item, index) => {
+      const row = itemsStartRow + index;
+      updates.push(
+        { range: `請求書テンプレート!A${row}`, values: [[item.date]] },           // 日付
+        { range: `請求書テンプレート!B${row}`, values: [[item.product_name]] },   // 品名
+        { range: `請求書テンプレート!C${row}`, values: [[item.unit_price]] },     // 単価
+        { range: `請求書テンプレート!D${row}`, values: [[item.quantity]] },       // 数量
+        { range: `請求書テンプレート!E${row}`, values: [[item.unit]] },           // 単位
+        { range: `請求書テンプレート!F${row}`, values: [[item.tax_rate]] },       // 税率
+        // G列（税抜金額）とH列（消費税）はスプレッドシートの数式で自動計算
+        { range: `請求書テンプレート!I${row}`, values: [[item.notes || '']] }     // 備考
+      );
+    });
+
+    console.log('📊 Batch update ranges V2:', updates.map(u => u.range));
+
+    // 一括更新
+    await this.sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: spreadsheetId,
+      requestBody: {
+        valueInputOption: 'USER_ENTERED',  // 数式を解釈させるため
+        data: updates
+      }
+    });
+
+    console.log('✅ Invoice sheet V2 updated successfully');
+  }
 }
 
 // シングルトンインスタンス
@@ -865,5 +1139,5 @@ export function getGoogleSheetsClient(): GoogleSheetsClient {
   return googleSheetsClient;
 }
 
-export type { DeliveryData, InvoiceData };
+export type { DeliveryData, InvoiceData, DeliveryDataV2, InvoiceDataV2 };
 export { GoogleSheetsError, GoogleSheetsErrorCode };
