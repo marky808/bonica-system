@@ -353,14 +353,17 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                               const newItemData = {
                                 purchaseId: purchase.id,
                                 quantity: 0,
-                                unitPrice: purchase.unitPrice || (purchase.price / purchase.quantity)
+                                unitPrice: purchase.unitPrice || (purchase.price && purchase.quantity ? purchase.price / purchase.quantity : 0),
+                                taxRate: 8,
+                                deliveryDate: "",
+                                unit: purchase.unit || ""
                               }
-                              
+
                               if (emptySlotIndex !== -1) {
                                 const updatedItem = {
                                   ...currentItems[emptySlotIndex],
                                   purchaseId: purchase.id,
-                                  unitPrice: purchase.unitPrice || (purchase.price / purchase.quantity)
+                                  unitPrice: purchase.unitPrice || (purchase.price && purchase.quantity ? purchase.price / purchase.quantity : 0)
                                 }
                                 update(emptySlotIndex, updatedItem)
                               } else {
@@ -383,7 +386,7 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                               在庫: {purchase.remainingQuantity} {purchase.unit}
                             </div>
                             <div className="text-xs text-green-600 font-medium">
-                              単価: {formatCurrency(purchase.unitPrice || (purchase.price / purchase.quantity))}
+                              単価: {formatCurrency(purchase.unitPrice || (purchase.price && purchase.quantity ? purchase.price / purchase.quantity : 0))}
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
                               仕入れ先: {purchase.supplier?.companyName}
@@ -444,7 +447,7 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                                 field.onChange(value)
                                 const purchase = getPurchaseInfo(value)
                                 if (purchase) {
-                                  form.setValue(`items.${index}.unitPrice`, purchase.unitPrice || (purchase.price / purchase.quantity))
+                                  form.setValue(`items.${index}.unitPrice`, purchase.unitPrice || (purchase.price && purchase.quantity ? purchase.price / purchase.quantity : 0))
                                 }
                               }} 
                               value={field.value}
