@@ -108,7 +108,7 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
       quantity: initialData?.quantity || undefined,
       unit: initialData?.unit || "",
       unitNote: initialData?.unitNote || "",
-      unitPrice: initialData?.unitPrice || initialData?.price / (initialData?.quantity || 1) || undefined,
+      unitPrice: initialData?.unitPrice || (initialData?.price && initialData?.quantity ? initialData.price / initialData.quantity : undefined),
       price: initialData?.price || undefined,
       taxType: (initialData?.taxType as "TAXABLE" | "TAX_FREE") || "TAXABLE",
       supplierId: initialData?.supplier?.id || "",
