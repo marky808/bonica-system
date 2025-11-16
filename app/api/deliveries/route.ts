@@ -207,27 +207,28 @@ export async function POST(request: Request) {
           },
         })
 
-        // Update purchase status if fully used (optimized to avoid additional query)
+        // Update purchase status based on remaining quantity
         const updatedPurchase = await tx.purchase.findUnique({
           where: { id: item.purchaseId },
           select: { remainingQuantity: true, quantity: true },
         })
 
         if (updatedPurchase) {
-          let newStatus = 'AVAILABLE'
+          let newStatus: string
           if (updatedPurchase.remainingQuantity === 0) {
             newStatus = 'USED'
           } else if (updatedPurchase.remainingQuantity < updatedPurchase.quantity) {
             newStatus = 'PARTIAL'
+          } else {
+            // remainingQuantity === quantity (全量残っている)
+            newStatus = 'UNUSED'
           }
 
-          // Only update if status actually changed
-          if (newStatus !== 'AVAILABLE') {
-            await tx.purchase.update({
-              where: { id: item.purchaseId },
-              data: { status: newStatus },
-            })
-          }
+          // Always update status to keep it synchronized with remainingQuantity
+          await tx.purchase.update({
+            where: { id: item.purchaseId },
+            data: { status: newStatus },
+          })
         }
       }
 

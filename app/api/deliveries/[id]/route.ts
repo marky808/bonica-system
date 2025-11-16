@@ -115,17 +115,19 @@ export async function PUT(
           })
 
           if (purchase) {
-            if (purchase.remainingQuantity === purchase.quantity) {
-              await tx.purchase.update({
-                where: { id: originalItem.purchaseId },
-                data: { status: 'UNUSED' },
-              })
-            } else if (purchase.remainingQuantity > 0) {
-              await tx.purchase.update({
-                where: { id: originalItem.purchaseId },
-                data: { status: 'PARTIAL' },
-              })
+            let newStatus: string
+            if (purchase.remainingQuantity === 0) {
+              newStatus = 'USED'
+            } else if (purchase.remainingQuantity === purchase.quantity) {
+              newStatus = 'UNUSED'
+            } else {
+              newStatus = 'PARTIAL'
             }
+
+            await tx.purchase.update({
+              where: { id: originalItem.purchaseId },
+              data: { status: newStatus },
+            })
           }
         }
 
@@ -183,17 +185,19 @@ export async function PUT(
           })
 
           if (updatedPurchase) {
+            let newStatus: string
             if (updatedPurchase.remainingQuantity === 0) {
-              await tx.purchase.update({
-                where: { id: item.purchaseId },
-                data: { status: 'USED' },
-              })
+              newStatus = 'USED'
             } else if (updatedPurchase.remainingQuantity < updatedPurchase.quantity) {
-              await tx.purchase.update({
-                where: { id: item.purchaseId },
-                data: { status: 'PARTIAL' },
-              })
+              newStatus = 'PARTIAL'
+            } else {
+              newStatus = 'UNUSED'
             }
+
+            await tx.purchase.update({
+              where: { id: item.purchaseId },
+              data: { status: newStatus },
+            })
           }
         }
 
