@@ -5,43 +5,28 @@ import { MainLayout } from "@/components/layout/main-layout"
 import { PurchaseForm } from "@/components/purchases/purchase-form"
 import { useRouter } from "next/navigation"
 import { apiClient } from "@/lib/api"
-import { useToast } from "@/hooks/use-toast"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function NewPurchasePage() {
   const router = useRouter()
-  const { toast } = useToast()
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState("")
 
   const handleSubmit = async (data: any) => {
-    setIsSubmitting(true)
+    setError("")
 
     try {
       const response = await apiClient.createPurchase(data)
 
       if (response.error) {
-        toast({
-          title: "エラー",
-          description: response.error,
-          variant: "destructive",
-        })
-        setIsSubmitting(false)
+        setError(response.error)
         return
       }
 
-      toast({
-        title: "成功",
-        description: "仕入れ情報を登録しました",
-      })
-
+      // Success - redirect to purchases list
       router.push("/purchases")
     } catch (error: any) {
       console.error("Purchase creation error:", error)
-      toast({
-        title: "エラー",
-        description: error.message || "仕入れ登録に失敗しました",
-        variant: "destructive",
-      })
-      setIsSubmitting(false)
+      setError(error.message || "仕入れ登録に失敗しました")
     }
   }
 
@@ -56,6 +41,12 @@ export default function NewPurchasePage() {
           <h1 className="text-3xl font-bold text-balance">新規仕入れ登録</h1>
           <p className="text-muted-foreground text-pretty">新しい農産物の仕入れ情報を登録します</p>
         </div>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
         <PurchaseForm
           onSubmit={handleSubmit}
