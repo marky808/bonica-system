@@ -310,10 +310,12 @@ class ApiClient {
 
   async createPurchase(data: {
     productName: string
+    productPrefixId?: string
     categoryId: string
     quantity: number
     unit: string
     unitNote?: string
+    unitPrice: number
     price: number
     taxType?: string
     supplierId: string
