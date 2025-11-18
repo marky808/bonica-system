@@ -234,14 +234,13 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>商品プレフィックス</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <Select onValueChange={field.onChange} value={field.value || undefined}>
                       <FormControl>
                         <SelectTrigger className="h-12">
                           <SelectValue placeholder="プレフィックスなし" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">なし</SelectItem>
                         {productPrefixes.map((prefix) => (
                           <SelectItem key={prefix.id} value={prefix.id}>
                             {prefix.name}
