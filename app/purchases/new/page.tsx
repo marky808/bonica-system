@@ -1,15 +1,23 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
 import { PurchaseForm } from "@/components/purchases/purchase-form"
 import { useRouter } from "next/navigation"
 import { apiClient } from "@/lib/api"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useAuth } from "@/lib/auth-context"
 
 export default function NewPurchasePage() {
   const router = useRouter()
   const [error, setError] = useState("")
+  const { isAuthenticated, isLoading } = useAuth()
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isAuthenticated, isLoading, router])
 
   const handleSubmit = async (data: any) => {
     setError("")
@@ -32,6 +40,20 @@ export default function NewPurchasePage() {
 
   const handleCancel = () => {
     router.push("/purchases")
+  }
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-muted-foreground">読み込み中...</div>
+        </div>
+      </MainLayout>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return null
   }
 
   return (
