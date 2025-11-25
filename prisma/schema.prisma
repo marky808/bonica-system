@@ -61,11 +61,14 @@ model Customer {
   paymentTerms              String     @default("30days")
   invoiceRegistrationNumber String?
   invoiceNotes              String?
+  billingCustomerId         String?
   createdAt                 DateTime   @default(now())
   updatedAt                 DateTime   @updatedAt
   name                      String     @default("")
   address                   String     @default("")
   deliveries                Delivery[]
+  billingCustomer           Customer?  @relation("BillingRelation", fields: [billingCustomerId], references: [id])
+  deliveryCustomers         Customer[] @relation("BillingRelation")
 
   @@map("customers")
 }

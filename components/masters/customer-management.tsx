@@ -36,6 +36,7 @@ const customerSchema = z.object({
   paymentTerms: z.string().default("30days"),
   invoiceRegistrationNumber: z.string().optional(),
   invoiceNotes: z.string().optional(),
+  billingCustomerId: z.string().optional().nullable(),
 })
 
 type CustomerFormData = z.infer<typeof customerSchema>
@@ -70,6 +71,7 @@ export function CustomerManagement({ onCustomerUpdated }: CustomerManagementProp
       paymentTerms: "30days",
       invoiceRegistrationNumber: "",
       invoiceNotes: "",
+      billingCustomerId: null,
     },
   })
 
@@ -156,6 +158,7 @@ export function CustomerManagement({ onCustomerUpdated }: CustomerManagementProp
       paymentTerms: customer.paymentTerms || "30days",
       invoiceRegistrationNumber: customer.invoiceRegistrationNumber || "",
       invoiceNotes: customer.invoiceNotes || "",
+      billingCustomerId: customer.billingCustomerId || null,
     })
     setShowForm(true)
   }
@@ -259,7 +262,11 @@ export function CustomerManagement({ onCustomerUpdated }: CustomerManagementProp
                           <p className="font-medium">納品先:</p>
                           <p>{customer.deliveryAddress}</p>
                           <p className="font-medium mt-1">請求先:</p>
-                          <p>{customer.billingAddress}</p>
+                          {customer.billingCustomer ? (
+                            <p>{customer.billingCustomer.companyName} ({customer.billingCustomer.billingAddress})</p>
+                          ) : (
+                            <p>{customer.billingAddress}</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -298,7 +305,7 @@ export function CustomerManagement({ onCustomerUpdated }: CustomerManagementProp
                   <TableHead>担当者</TableHead>
                   <TableHead>電話番号</TableHead>
                   <TableHead>納品住所</TableHead>
-                  <TableHead>請求先住所</TableHead>
+                  <TableHead>請求先</TableHead>
                   <TableHead>配送時間</TableHead>
                   <TableHead>操作</TableHead>
                 </TableRow>
@@ -310,7 +317,13 @@ export function CustomerManagement({ onCustomerUpdated }: CustomerManagementProp
                     <TableCell>{customer.contactPerson}</TableCell>
                     <TableCell>{customer.phone}</TableCell>
                     <TableCell className="max-w-[200px] truncate">{customer.deliveryAddress}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{customer.billingAddress}</TableCell>
+                    <TableCell className="max-w-[200px] truncate">
+                      {customer.billingCustomer ? (
+                        <span className="text-blue-600">{customer.billingCustomer.companyName}</span>
+                      ) : (
+                        <span className="text-muted-foreground">自社請求</span>
+                      )}
+                    </TableCell>
                     <TableCell className="max-w-[150px] truncate">{customer.deliveryTimePreference || "指定なし"}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
@@ -503,6 +516,37 @@ export function CustomerManagement({ onCustomerUpdated }: CustomerManagementProp
                         {...field}
                       />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="billingCustomerId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>請求先</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === "_self" ? null : value)}
+                      value={field.value || "_self"}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="請求先を選択" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="_self">この納品先に請求</SelectItem>
+                        {customers
+                          .filter(c => editingCustomer ? c.id !== editingCustomer.id : true)
+                          .map((customer) => (
+                            <SelectItem key={customer.id} value={customer.id}>
+                              {customer.companyName}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

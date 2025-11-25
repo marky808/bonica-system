@@ -17,6 +17,7 @@ const updateCustomerSchema = z.object({
   paymentTerms: z.string().default("30days"),
   invoiceRegistrationNumber: z.string().optional(),
   invoiceNotes: z.string().optional(),
+  billingCustomerId: z.string().nullable().optional(),
 })
 
 // PUT /api/customers/[id] - Update customer
@@ -86,6 +87,10 @@ export async function PUT(
         paymentTerms: validatedData.paymentTerms,
         invoiceRegistrationNumber: validatedData.invoiceRegistrationNumber || null,
         invoiceNotes: validatedData.invoiceNotes || null,
+        billingCustomerId: validatedData.billingCustomerId || null,
+      },
+      include: {
+        billingCustomer: true,
       }
     })
     
@@ -130,6 +135,7 @@ export async function GET(
     const customer = await prisma.customer.findUnique({
       where: { id },
       include: {
+        billingCustomer: true,
         deliveries: {
           orderBy: { deliveryDate: 'desc' },
           take: 10,

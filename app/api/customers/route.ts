@@ -21,6 +21,9 @@ export async function GET(request: NextRequest) {
     requireAuth(request)
 
     const customers = await prisma.customer.findMany({
+      include: {
+        billingCustomer: true,
+      },
       orderBy: {
         companyName: 'asc',
       },
@@ -53,7 +56,8 @@ export async function POST(request: NextRequest) {
       billingDay = 31,
       paymentTerms = '30days',
       invoiceRegistrationNumber,
-      invoiceNotes
+      invoiceNotes,
+      billingCustomerId
     } = await request.json()
 
     if (!companyName || !contactPerson || !phone || !deliveryAddress || !billingAddress) {
@@ -77,7 +81,11 @@ export async function POST(request: NextRequest) {
         billingDay,
         paymentTerms,
         invoiceRegistrationNumber,
-        invoiceNotes
+        invoiceNotes,
+        billingCustomerId: billingCustomerId || null
+      },
+      include: {
+        billingCustomer: true,
       }
     })
 

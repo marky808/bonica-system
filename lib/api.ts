@@ -106,6 +106,10 @@ export interface Customer {
   billingCycle: string
   billingDay: number
   paymentTerms: string
+  invoiceRegistrationNumber?: string
+  invoiceNotes?: string
+  billingCustomerId?: string | null
+  billingCustomer?: Customer | null
   createdAt: string
   updatedAt: string
 }
