@@ -90,7 +90,23 @@ export async function PUT(
         billingCustomerId: validatedData.billingCustomerId || null,
       },
       include: {
-        billingCustomer: true,
+        billingCustomer: {
+          select: {
+            id: true,
+            companyName: true,
+            contactPerson: true,
+            phone: true,
+            deliveryAddress: true,
+            billingAddress: true,
+            billingCycle: true,
+            billingDay: true,
+            paymentTerms: true,
+            invoiceRegistrationNumber: true,
+            invoiceNotes: true,
+            createdAt: true,
+            updatedAt: true,
+          }
+        },
       }
     })
     
@@ -135,7 +151,23 @@ export async function GET(
     const customer = await prisma.customer.findUnique({
       where: { id },
       include: {
-        billingCustomer: true,
+        billingCustomer: {
+          select: {
+            id: true,
+            companyName: true,
+            contactPerson: true,
+            phone: true,
+            deliveryAddress: true,
+            billingAddress: true,
+            billingCycle: true,
+            billingDay: true,
+            paymentTerms: true,
+            invoiceRegistrationNumber: true,
+            invoiceNotes: true,
+            createdAt: true,
+            updatedAt: true,
+          }
+        },
         deliveries: {
           orderBy: { deliveryDate: 'desc' },
           take: 10,

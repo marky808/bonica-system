@@ -22,7 +22,23 @@ export async function GET(request: NextRequest) {
 
     const customers = await prisma.customer.findMany({
       include: {
-        billingCustomer: true,
+        billingCustomer: {
+          select: {
+            id: true,
+            companyName: true,
+            contactPerson: true,
+            phone: true,
+            deliveryAddress: true,
+            billingAddress: true,
+            billingCycle: true,
+            billingDay: true,
+            paymentTerms: true,
+            invoiceRegistrationNumber: true,
+            invoiceNotes: true,
+            createdAt: true,
+            updatedAt: true,
+          }
+        },
       },
       orderBy: {
         companyName: 'asc',
@@ -85,7 +101,23 @@ export async function POST(request: NextRequest) {
         billingCustomerId: billingCustomerId || null
       },
       include: {
-        billingCustomer: true,
+        billingCustomer: {
+          select: {
+            id: true,
+            companyName: true,
+            contactPerson: true,
+            phone: true,
+            deliveryAddress: true,
+            billingAddress: true,
+            billingCycle: true,
+            billingDay: true,
+            paymentTerms: true,
+            invoiceRegistrationNumber: true,
+            invoiceNotes: true,
+            createdAt: true,
+            updatedAt: true,
+          }
+        },
       }
     })
 
