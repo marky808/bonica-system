@@ -140,8 +140,9 @@ export async function POST(request: NextRequest) {
 
     const items = Array.from(itemsMap.values());
 
-    // 請求書番号を生成
-    const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(customerId).padStart(4, '0')}`;
+    // 請求書番号を生成（タイムスタンプを含めて一意にする）
+    const timestamp = Date.now().toString(36).toUpperCase().slice(-4);
+    const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${timestamp}`;
 
     // 請求日（今日）
     const invoiceDate = new Date().toISOString().split('T')[0];
