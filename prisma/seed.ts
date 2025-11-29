@@ -24,20 +24,29 @@ async function main() {
     })
   }
 
-  // Create admin user
+  // Create admin user (requires environment variables)
   console.log('Creating admin user...')
-  const hashedPassword = await bcrypt.hash(process.env.INITIAL_ADMIN_PASSWORD || '6391', 12)
-  
-  await prisma.user.upsert({
-    where: { email: process.env.INITIAL_ADMIN_EMAIL || '808works@gmail.com' },
-    update: {},
-    create: {
-      email: process.env.INITIAL_ADMIN_EMAIL || '808works@gmail.com',
-      name: process.env.INITIAL_ADMIN_NAME || '小西正高',
-      password: hashedPassword,
-      role: 'ADMIN'
-    }
-  })
+  const adminEmail = process.env.INITIAL_ADMIN_EMAIL
+  const adminPassword = process.env.INITIAL_ADMIN_PASSWORD
+  const adminName = process.env.INITIAL_ADMIN_NAME || 'Admin'
+
+  if (!adminEmail || !adminPassword) {
+    console.log('⚠️ INITIAL_ADMIN_EMAIL と INITIAL_ADMIN_PASSWORD が設定されていません。管理者ユーザーの作成をスキップします。')
+  } else {
+    const hashedPassword = await bcrypt.hash(adminPassword, 12)
+
+    await prisma.user.upsert({
+      where: { email: adminEmail },
+      update: {},
+      create: {
+        email: adminEmail,
+        name: adminName,
+        password: hashedPassword,
+        role: 'ADMIN'
+      }
+    })
+    console.log(`✅ 管理者ユーザー作成完了: ${adminEmail}`)
+  }
 
   // Create sample suppliers
   console.log('Creating sample suppliers...')

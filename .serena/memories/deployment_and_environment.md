@@ -21,9 +21,9 @@ GOOGLE_SHEETS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KE
 GOOGLE_SHEETS_PROJECT_ID="your-google-cloud-project-id"
 
 # 初期管理者ユーザー
-INITIAL_ADMIN_EMAIL="808works@gmail.com"
+INITIAL_ADMIN_EMAIL="[設定された管理者メール]"
 INITIAL_ADMIN_NAME="小西正高"
-INITIAL_ADMIN_PASSWORD="6391"
+INITIAL_ADMIN_PASSWORD="[設定されたパスワード]"
 
 # データベース初期化用セキュリティキー
 INIT_SECRET_KEY="your-super-secret-init-key-change-this-in-production"

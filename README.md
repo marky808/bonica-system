@@ -403,10 +403,10 @@ npm run db:migrate
 ## 📝 初期データ
 
 ### 初期ユーザー
-- **Email**: 808works@gmail.com
-- **Password**: 6391
-- **Name**: 小西正高
-- **Role**: admin
+環境変数で設定してください:
+- `INITIAL_ADMIN_EMAIL`: 管理者のメールアドレス
+- `INITIAL_ADMIN_PASSWORD`: 管理者のパスワード
+- `INITIAL_ADMIN_NAME`: 管理者の名前
 
 ### 商品カテゴリー
 - 果物

@@ -31,10 +31,10 @@ SdIHw3hYt2Szdgylx2OqiQ=="
 # データベース初期化用セキュリティキー（強力なランダム文字列に変更）
 INIT_SECRET_KEY="8YEwoMWlaMUh3J1HDzQWneBcvNPwAwYUzkEIdVS808I="
 
-# 初期管理者ユーザー（必要に応じて変更）
-INITIAL_ADMIN_EMAIL="808works@gmail.com"
-INITIAL_ADMIN_NAME="小西正高"
-INITIAL_ADMIN_PASSWORD="6391"
+# 初期管理者ユーザー（必ず変更してください）
+INITIAL_ADMIN_EMAIL="your-email@example.com"
+INITIAL_ADMIN_NAME="管理者名"
+INITIAL_ADMIN_PASSWORD="強力なパスワードを設定"
 
 # JWT有効期限（オプション）
 JWT_EXPIRES_IN="7d"
@@ -87,11 +87,11 @@ curl -X POST https://your-app.vercel.app/api/admin/init \
 
 ## 🔐 ログイン情報
 
-初期化完了後、以下の情報でログイン可能：
+初期化完了後、環境変数で設定した認証情報でログイン可能：
 
 - **URL**: `https://your-app.vercel.app/login`
-- **メールアドレス**: `808works@gmail.com`
-- **パスワード**: `6391`
+- **メールアドレス**: `INITIAL_ADMIN_EMAIL`で設定した値
+- **パスワード**: `INITIAL_ADMIN_PASSWORD`で設定した値
 
 ## 📊 動作確認
 

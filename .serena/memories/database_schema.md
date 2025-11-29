@@ -156,7 +156,7 @@ DIRECT_URL="postgresql://..."  # Vercel Postgres用
 - その他
 
 ### 初期管理者ユーザー
-- Email: 808works@gmail.com
-- Password: 6391（ハッシュ化済み）
+- Email: [設定された管理者メール]
+- Password: [設定されたパスワード]（ハッシュ化済み）
 - Name: 小西正高
 - Role: ADMIN

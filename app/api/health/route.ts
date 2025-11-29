@@ -78,17 +78,22 @@ async function autoInitializeDatabase() {
   
   // 2. 管理者ユーザーを作成
   console.log('👤 Creating admin user...')
-  const hashedPassword = await bcrypt.hash(
-    process.env.INITIAL_ADMIN_PASSWORD || '6391', 
-    12
-  )
-  
+  const adminEmail = process.env.INITIAL_ADMIN_EMAIL
+  const adminPassword = process.env.INITIAL_ADMIN_PASSWORD
+  const adminName = process.env.INITIAL_ADMIN_NAME || 'Admin'
+
+  if (!adminEmail || !adminPassword) {
+    throw new Error('INITIAL_ADMIN_EMAIL と INITIAL_ADMIN_PASSWORD が設定されていません')
+  }
+
+  const hashedPassword = await bcrypt.hash(adminPassword, 12)
+
   const adminUser = await prisma.user.upsert({
-    where: { email: process.env.INITIAL_ADMIN_EMAIL || '808works@gmail.com' },
+    where: { email: adminEmail },
     update: {},
     create: {
-      email: process.env.INITIAL_ADMIN_EMAIL || '808works@gmail.com',
-      name: process.env.INITIAL_ADMIN_NAME || '小西正高',
+      email: adminEmail,
+      name: adminName,
       password: hashedPassword,
       role: 'ADMIN'
     }
