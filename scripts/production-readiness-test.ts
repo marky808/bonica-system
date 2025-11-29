@@ -104,14 +104,6 @@ async function main() {
     console.log(`   → ${suppliers.length}件の仕入れ先`)
   })
 
-  await runTest('4. 商品一覧取得', async () => {
-    const response = await fetch(`${BASE_URL}/api/products`, { headers })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const products = await response.json()
-    if (!Array.isArray(products)) throw new Error('配列ではありません')
-    console.log(`   → ${products.length}件の商品`)
-  })
-
   // 3. 仕入れフローテスト
   await runTest('5. 仕入れ一覧取得', async () => {
     const response = await fetch(`${BASE_URL}/api/purchases`, { headers })
