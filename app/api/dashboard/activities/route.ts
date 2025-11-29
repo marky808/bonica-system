@@ -30,7 +30,13 @@ export async function GET(request: NextRequest) {
       take: Math.ceil(limit / 3),
       orderBy: { createdAt: 'desc' },
       include: {
-        customer: true,
+        customer: {
+          select: {
+            id: true,
+            companyName: true,
+            contactPerson: true,
+          }
+        },
         items: {
           include: {
             purchase: {
@@ -42,7 +48,7 @@ export async function GET(request: NextRequest) {
         },
       },
     })
-    
+
     // 最近のfreee請求書連携活動を取得
     const recentInvoiceActivities = await prisma.delivery.findMany({
       where: {
@@ -56,7 +62,13 @@ export async function GET(request: NextRequest) {
       take: Math.ceil(limit / 3),
       orderBy: { updatedAt: 'desc' },
       include: {
-        customer: true,
+        customer: {
+          select: {
+            id: true,
+            companyName: true,
+            contactPerson: true,
+          }
+        },
       },
     })
     

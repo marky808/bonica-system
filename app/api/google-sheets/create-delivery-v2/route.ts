@@ -47,7 +47,24 @@ export async function POST(request: NextRequest) {
     const delivery = await prisma.delivery.findUnique({
       where: { id: deliveryId },
       include: {
-        customer: true,
+        customer: {
+          select: {
+            id: true,
+            companyName: true,
+            contactPerson: true,
+            phone: true,
+            deliveryAddress: true,
+            billingAddress: true,
+            deliveryTimePreference: true,
+            specialRequests: true,
+            specialNotes: true,
+            billingCycle: true,
+            billingDay: true,
+            paymentTerms: true,
+            invoiceRegistrationNumber: true,
+            invoiceNotes: true,
+          }
+        },
         items: {
           include: {
             purchase: true

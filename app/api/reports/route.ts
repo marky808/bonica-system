@@ -329,13 +329,22 @@ async function getPurchasesListReport(startDate: Date, endDate: Date) {
 
 async function getDeliveriesListReport(startDate: Date, endDate: Date) {
   console.log('🚚 納品一覧レポート生成中...')
-  
+
   const deliveries = await prisma.delivery.findMany({
     where: {
       deliveryDate: { gte: startDate, lte: endDate }
     },
     include: {
-      customer: true,
+      customer: {
+        select: {
+          id: true,
+          companyName: true,
+          contactPerson: true,
+          phone: true,
+          deliveryAddress: true,
+          billingAddress: true,
+        }
+      },
       items: {
         include: {
           purchase: {

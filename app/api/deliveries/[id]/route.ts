@@ -311,9 +311,18 @@ export async function DELETE(
     const result = await prisma.$transaction(async (tx) => {
       const delivery = await tx.delivery.findUnique({
         where: { id },
-        include: { 
+        include: {
           items: true,
-          customer: true
+          customer: {
+            select: {
+              id: true,
+              companyName: true,
+              contactPerson: true,
+              phone: true,
+              deliveryAddress: true,
+              billingAddress: true,
+            }
+          }
         },
       })
 
