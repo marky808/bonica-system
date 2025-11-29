@@ -35,9 +35,20 @@ export async function POST(request: NextRequest) {
       console.log('✅ Using new invoice template V2 from environment:', templateId);
     }
 
-    // 顧客情報を取得
+    // 顧客情報を取得（請求先情報を含む）
     const customer = await prisma.customer.findUnique({
-      where: { id: customerId }
+      where: { id: customerId },
+      include: {
+        billingCustomer: {
+          select: {
+            id: true,
+            companyName: true,
+            billingAddress: true,
+            invoiceRegistrationNumber: true,
+            invoiceNotes: true,
+          }
+        }
+      }
     });
 
     if (!customer) {
@@ -46,6 +57,22 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    // 請求先の決定: billingCustomerが設定されている場合はそちらを使用
+    const billingTarget = customer.billingCustomer || customer;
+    const billingCompanyName = customer.billingCustomer
+      ? customer.billingCustomer.companyName
+      : customer.companyName;
+    const billingAddress = customer.billingCustomer
+      ? customer.billingCustomer.billingAddress
+      : customer.billingAddress;
+
+    console.log('📋 請求先情報:', {
+      納品先: customer.companyName,
+      請求先: billingCompanyName,
+      請求先住所: billingAddress,
+      別請求先設定: !!customer.billingCustomer
+    });
 
     // 対象期間の納品データを取得
     const deliveries = await prisma.delivery.findMany({
@@ -119,12 +146,12 @@ export async function POST(request: NextRequest) {
     // 請求日（今日）
     const invoiceDate = new Date().toISOString().split('T')[0];
 
-    // V2データ構造に変換
+    // V2データ構造に変換（請求先情報を使用）
     const invoiceDataV2: InvoiceDataV2 = {
       invoice_number: invoiceNumber,
       invoice_date: invoiceDate,
-      customer_name: customer.companyName,
-      customer_address: customer.deliveryAddress,
+      customer_name: billingCompanyName,
+      customer_address: billingAddress,
       items: items
     };
 
