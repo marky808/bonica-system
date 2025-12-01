@@ -142,8 +142,8 @@ async function createNewInvoiceTemplate() {
     },
   });
 
-  // 会社情報ブロック（2-6行目）
-  // 2行目: 会社名
+  // 請求先情報（2-5行目）- 左側に配置（一般的な配置）
+  // 2行目: お客様名（プレースホルダー）
   requests.push({
     mergeCells: {
       range: {
@@ -168,7 +168,7 @@ async function createNewInvoiceTemplate() {
       },
       cell: {
         userEnteredValue: {
-          stringValue: 'ボニカアグリジェント株式会社',
+          stringValue: '{{customerName}} 御中',
         },
         userEnteredFormat: {
           textFormat: {
@@ -181,7 +181,7 @@ async function createNewInvoiceTemplate() {
     },
   });
 
-  // 3行目: 法人番号
+  // 3行目: お客様住所（プレースホルダー）
   requests.push({
     mergeCells: {
       range: {
@@ -206,7 +206,7 @@ async function createNewInvoiceTemplate() {
       },
       cell: {
         userEnteredValue: {
-          stringValue: '法人番号: T1234567890123',
+          stringValue: '{{customerAddress}}',
         },
         userEnteredFormat: {
           textFormat: {
@@ -218,7 +218,7 @@ async function createNewInvoiceTemplate() {
     },
   });
 
-  // 4行目: 住所
+  // 4行目: 請求日
   requests.push({
     mergeCells: {
       range: {
@@ -226,7 +226,7 @@ async function createNewInvoiceTemplate() {
         startRowIndex: 3,
         endRowIndex: 4,
         startColumnIndex: 0,
-        endColumnIndex: 4,
+        endColumnIndex: 2,
       },
       mergeType: 'MERGE_ALL',
     },
@@ -240,108 +240,6 @@ async function createNewInvoiceTemplate() {
         endRowIndex: 4,
         startColumnIndex: 0,
         endColumnIndex: 1,
-      },
-      cell: {
-        userEnteredValue: {
-          stringValue: '〒123-4567 東京都○○区○○ 1-2-3',
-        },
-        userEnteredFormat: {
-          textFormat: {
-            fontSize: 10,
-          },
-        },
-      },
-      fields: 'userEnteredValue,userEnteredFormat',
-    },
-  });
-
-  // 5行目: 電話番号
-  requests.push({
-    mergeCells: {
-      range: {
-        sheetId: sheetId,
-        startRowIndex: 4,
-        endRowIndex: 5,
-        startColumnIndex: 0,
-        endColumnIndex: 4,
-      },
-      mergeType: 'MERGE_ALL',
-    },
-  });
-
-  requests.push({
-    repeatCell: {
-      range: {
-        sheetId: sheetId,
-        startRowIndex: 4,
-        endRowIndex: 5,
-        startColumnIndex: 0,
-        endColumnIndex: 1,
-      },
-      cell: {
-        userEnteredValue: {
-          stringValue: 'TEL: 03-1234-5678',
-        },
-        userEnteredFormat: {
-          textFormat: {
-            fontSize: 10,
-          },
-        },
-      },
-      fields: 'userEnteredValue,userEnteredFormat',
-    },
-  });
-
-  // 6行目: 空行
-
-  // 請求先情報（7-8行目）- 右側に配置
-  // 7行目: お客様名（プレースホルダー）
-  requests.push({
-    mergeCells: {
-      range: {
-        sheetId: sheetId,
-        startRowIndex: 6,
-        endRowIndex: 7,
-        startColumnIndex: 5,
-        endColumnIndex: 9,
-      },
-      mergeType: 'MERGE_ALL',
-    },
-  });
-
-  requests.push({
-    repeatCell: {
-      range: {
-        sheetId: sheetId,
-        startRowIndex: 6,
-        endRowIndex: 7,
-        startColumnIndex: 5,
-        endColumnIndex: 6,
-      },
-      cell: {
-        userEnteredValue: {
-          stringValue: '{{customerName}} 御中',
-        },
-        userEnteredFormat: {
-          textFormat: {
-            fontSize: 12,
-            bold: true,
-          },
-        },
-      },
-      fields: 'userEnteredValue,userEnteredFormat',
-    },
-  });
-
-  // 8行目: 請求日・請求番号
-  requests.push({
-    repeatCell: {
-      range: {
-        sheetId: sheetId,
-        startRowIndex: 7,
-        endRowIndex: 8,
-        startColumnIndex: 5,
-        endColumnIndex: 6,
       },
       cell: {
         userEnteredValue: {
@@ -357,14 +255,28 @@ async function createNewInvoiceTemplate() {
     },
   });
 
+  // 4行目: 請求番号（右寄せ）
+  requests.push({
+    mergeCells: {
+      range: {
+        sheetId: sheetId,
+        startRowIndex: 3,
+        endRowIndex: 4,
+        startColumnIndex: 2,
+        endColumnIndex: 4,
+      },
+      mergeType: 'MERGE_ALL',
+    },
+  });
+
   requests.push({
     repeatCell: {
       range: {
         sheetId: sheetId,
-        startRowIndex: 7,
-        endRowIndex: 8,
-        startColumnIndex: 7,
-        endColumnIndex: 8,
+        startRowIndex: 3,
+        endRowIndex: 4,
+        startColumnIndex: 2,
+        endColumnIndex: 3,
       },
       cell: {
         userEnteredValue: {
@@ -379,6 +291,164 @@ async function createNewInvoiceTemplate() {
       fields: 'userEnteredValue,userEnteredFormat',
     },
   });
+
+  // 5行目: 空行
+
+  // 会社情報ブロック（2-5行目）- 右側に配置（発行元）
+  // 2行目: 会社名
+  requests.push({
+    mergeCells: {
+      range: {
+        sheetId: sheetId,
+        startRowIndex: 1,
+        endRowIndex: 2,
+        startColumnIndex: 5,
+        endColumnIndex: 9,
+      },
+      mergeType: 'MERGE_ALL',
+    },
+  });
+
+  requests.push({
+    repeatCell: {
+      range: {
+        sheetId: sheetId,
+        startRowIndex: 1,
+        endRowIndex: 2,
+        startColumnIndex: 5,
+        endColumnIndex: 6,
+      },
+      cell: {
+        userEnteredValue: {
+          stringValue: 'ボニカアグリジェント株式会社',
+        },
+        userEnteredFormat: {
+          textFormat: {
+            fontSize: 14,
+            bold: true,
+          },
+          horizontalAlignment: 'RIGHT',
+        },
+      },
+      fields: 'userEnteredValue,userEnteredFormat',
+    },
+  });
+
+  // 3行目: 法人番号
+  requests.push({
+    mergeCells: {
+      range: {
+        sheetId: sheetId,
+        startRowIndex: 2,
+        endRowIndex: 3,
+        startColumnIndex: 5,
+        endColumnIndex: 9,
+      },
+      mergeType: 'MERGE_ALL',
+    },
+  });
+
+  requests.push({
+    repeatCell: {
+      range: {
+        sheetId: sheetId,
+        startRowIndex: 2,
+        endRowIndex: 3,
+        startColumnIndex: 5,
+        endColumnIndex: 6,
+      },
+      cell: {
+        userEnteredValue: {
+          stringValue: '法人番号: T1234567890123',
+        },
+        userEnteredFormat: {
+          textFormat: {
+            fontSize: 10,
+          },
+          horizontalAlignment: 'RIGHT',
+        },
+      },
+      fields: 'userEnteredValue,userEnteredFormat',
+    },
+  });
+
+  // 4行目: 住所
+  requests.push({
+    mergeCells: {
+      range: {
+        sheetId: sheetId,
+        startRowIndex: 3,
+        endRowIndex: 4,
+        startColumnIndex: 5,
+        endColumnIndex: 9,
+      },
+      mergeType: 'MERGE_ALL',
+    },
+  });
+
+  requests.push({
+    repeatCell: {
+      range: {
+        sheetId: sheetId,
+        startRowIndex: 3,
+        endRowIndex: 4,
+        startColumnIndex: 5,
+        endColumnIndex: 6,
+      },
+      cell: {
+        userEnteredValue: {
+          stringValue: '〒123-4567 東京都○○区○○ 1-2-3',
+        },
+        userEnteredFormat: {
+          textFormat: {
+            fontSize: 10,
+          },
+          horizontalAlignment: 'RIGHT',
+        },
+      },
+      fields: 'userEnteredValue,userEnteredFormat',
+    },
+  });
+
+  // 5行目: 電話番号
+  requests.push({
+    mergeCells: {
+      range: {
+        sheetId: sheetId,
+        startRowIndex: 4,
+        endRowIndex: 5,
+        startColumnIndex: 5,
+        endColumnIndex: 9,
+      },
+      mergeType: 'MERGE_ALL',
+    },
+  });
+
+  requests.push({
+    repeatCell: {
+      range: {
+        sheetId: sheetId,
+        startRowIndex: 4,
+        endRowIndex: 5,
+        startColumnIndex: 5,
+        endColumnIndex: 6,
+      },
+      cell: {
+        userEnteredValue: {
+          stringValue: 'TEL: 03-1234-5678',
+        },
+        userEnteredFormat: {
+          textFormat: {
+            fontSize: 10,
+          },
+          horizontalAlignment: 'RIGHT',
+        },
+      },
+      fields: 'userEnteredValue,userEnteredFormat',
+    },
+  });
+
+  // 6-8行目: 空行（レイアウト調整用）
 
   // 9行目: 空行
 

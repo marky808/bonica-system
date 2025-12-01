@@ -901,17 +901,19 @@ class GoogleSheetsClient {
 
   /**
    * 新しい9列構造の納品書テンプレートにデータを投入
+   * レイアウト: 左側=顧客情報、右側=発行元（ボニカ）
    */
   private async updateDeliverySheetV2(spreadsheetId: string, data: DeliveryDataV2) {
     console.log('📊 Updating delivery sheet V2:', { spreadsheetId });
 
     const updates: Array<{ range: string; values: any[][] }> = [];
 
-    // ヘッダー情報（7-8行目）
+    // 顧客情報（2-4行目、左側）
     updates.push(
-      { range: '納品書テンプレート!F7', values: [[`${data.customer_name} 御中`]] },
-      { range: '納品書テンプレート!F8', values: [[`納品日: ${data.delivery_date}`]] },
-      { range: '納品書テンプレート!H8', values: [[`納品書番号: ${data.delivery_number}`]] }
+      { range: '納品書テンプレート!A2', values: [[`${data.customer_name} 御中`]] },
+      { range: '納品書テンプレート!A3', values: [[data.customer_address || '']] },
+      { range: '納品書テンプレート!A4', values: [[`納品日: ${data.delivery_date}`]] },
+      { range: '納品書テンプレート!C4', values: [[`納品書番号: ${data.delivery_number}`]] }
     );
 
     // 明細データ（11行目から開始、9列構造）
@@ -1017,17 +1019,19 @@ class GoogleSheetsClient {
 
   /**
    * 新しい9列構造の請求書テンプレートにデータを投入
+   * レイアウト: 左側=顧客情報、右側=発行元（ボニカ）
    */
   private async updateInvoiceSheetV2(spreadsheetId: string, data: InvoiceDataV2) {
     console.log('📊 Updating invoice sheet V2:', { spreadsheetId });
 
     const updates: Array<{ range: string; values: any[][] }> = [];
 
-    // ヘッダー情報（7-8行目）
+    // 顧客情報（2-4行目、左側）
     updates.push(
-      { range: '請求書テンプレート!F7', values: [[`${data.customer_name} 御中`]] },
-      { range: '請求書テンプレート!F8', values: [[`請求日: ${data.invoice_date}`]] },
-      { range: '請求書テンプレート!H8', values: [[`請求番号: ${data.invoice_number}`]] }
+      { range: '請求書テンプレート!A2', values: [[`${data.customer_name} 御中`]] },
+      { range: '請求書テンプレート!A3', values: [[data.customer_address || '']] },
+      { range: '請求書テンプレート!A4', values: [[`請求日: ${data.invoice_date}`]] },
+      { range: '請求書テンプレート!C4', values: [[`請求番号: ${data.invoice_number}`]] }
     );
 
     // 明細データ（11行目から開始、9列構造）
