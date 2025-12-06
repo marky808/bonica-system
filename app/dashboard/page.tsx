@@ -58,6 +58,7 @@ export default function DashboardPage() {
             monthlyProfit: Number(actualData.monthlyProfit) || 0,
             totalInventoryValue: Number(actualData.totalInventoryValue) || 0,
             totalInventoryItems: Number(actualData.totalInventoryItems) || 0,
+            unlinkedDeliveriesCount: Number(actualData.unlinkedDeliveriesCount) || 0,
           }
           console.log('✅ ダッシュボード統計設定完了:', dashboardStats)
           setStats(dashboardStats)

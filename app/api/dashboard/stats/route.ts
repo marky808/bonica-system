@@ -80,11 +80,18 @@ export async function GET(request: NextRequest) {
         unitPrice: true,
       },
     })
-    
+
     const totalInventoryValue = inventoryItems.reduce(
       (total, item) => total + (item.remainingQuantity * item.unitPrice),
       0
     )
+
+    // 仕入れ未紐付けの納品件数を取得
+    const unlinkedDeliveriesCount = await prisma.delivery.count({
+      where: {
+        purchaseLinkStatus: 'UNLINKED',
+      },
+    })
     
     const monthlyPurchaseAmount = monthlyPurchases._sum.price || 0
     const monthlyDeliveryAmount = monthlyDeliveries._sum.totalAmount || 0
@@ -103,6 +110,7 @@ export async function GET(request: NextRequest) {
       monthlyProfit,
       totalInventoryValue,
       totalInventoryItems,
+      unlinkedDeliveriesCount, // 仕入れ未紐付け納品件数
       period: {
         year: currentYear,
         month: currentMonth,

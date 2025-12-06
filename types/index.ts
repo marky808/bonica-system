@@ -100,4 +100,5 @@ export interface DashboardStats {
   monthlyProfit: number
   totalInventoryValue: number
   totalInventoryItems: number
+  unlinkedDeliveriesCount?: number // 仕入れ未紐付け納品件数
 }

@@ -5,16 +5,41 @@ import { verifyToken } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
+// 通常モード用スキーマ（既存）
+const normalModeItemSchema = z.object({
+  purchaseId: z.string().min(1, '仕入れ商品を選択してください'),
+  quantity: z.number().min(0.01, '数量を入力してください'),
+  unitPrice: z.number().min(0, '単価を入力してください'),
+  deliveryDate: z.string().optional(),
+  unit: z.string().optional(),
+  taxRate: z.number().default(8),
+})
+
+// 直接入力モード用スキーマ（新規）
+const directModeItemSchema = z.object({
+  productName: z.string().min(1, '商品名を入力してください'),
+  categoryId: z.string().min(1, 'カテゴリーを選択してください'),
+  quantity: z.number().min(0.01, '数量を入力してください'),
+  unitPrice: z.number().min(0, '単価を入力してください'),
+  unit: z.string().min(1, '単位を入力してください'),
+  taxRate: z.number().default(8),
+  notes: z.string().optional(),
+})
+
 const createDeliverySchema = z.object({
   customerId: z.string().min(1, 'お客様を選択してください'),
   deliveryDate: z.string().min(1, '納品日を入力してください'),
+  inputMode: z.enum(['NORMAL', 'DIRECT']).default('NORMAL'),
   items: z.array(z.object({
-    purchaseId: z.string().min(1, '仕入れ商品を選択してください'),
+    purchaseId: z.string().optional(),
+    productName: z.string().optional(),
+    categoryId: z.string().optional(),
     quantity: z.number().min(0.01, '数量を入力してください'),
     unitPrice: z.number().min(0, '単価を入力してください'),
     deliveryDate: z.string().optional(),
     unit: z.string().optional(),
     taxRate: z.number().default(8),
+    notes: z.string().optional(),
   })).min(1, '納品商品を1つ以上選択してください'),
 })
 
@@ -142,24 +167,43 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const validatedData = createDeliverySchema.parse(body)
+    const isDirectMode = validatedData.inputMode === 'DIRECT'
 
     // Start transaction with timeout configuration
     const result = await prisma.$transaction(async (tx) => {
-      // Check stock availability for all items
-      for (const item of validatedData.items) {
-        const purchase = await tx.purchase.findUnique({
-          where: { id: item.purchaseId },
-          select: { remainingQuantity: true, productName: true },
-        })
+      // 通常モードの場合のみ在庫チェック
+      if (!isDirectMode) {
+        for (const item of validatedData.items) {
+          if (!item.purchaseId) {
+            throw new Error('通常モードでは仕入れ商品を選択してください')
+          }
+          const purchase = await tx.purchase.findUnique({
+            where: { id: item.purchaseId },
+            select: { remainingQuantity: true, productName: true },
+          })
 
-        if (!purchase) {
-          throw new Error(`仕入れ商品が見つかりません (ID: ${item.purchaseId})`)
+          if (!purchase) {
+            throw new Error(`仕入れ商品が見つかりません (ID: ${item.purchaseId})`)
+          }
+
+          if (purchase.remainingQuantity < item.quantity) {
+            throw new Error(
+              `${purchase.productName} の在庫が不足しています。在庫: ${purchase.remainingQuantity}, 要求: ${item.quantity}`
+            )
+          }
         }
-
-        if (purchase.remainingQuantity < item.quantity) {
-          throw new Error(
-            `${purchase.productName} の在庫が不足しています。在庫: ${purchase.remainingQuantity}, 要求: ${item.quantity}`
-          )
+      } else {
+        // 直接入力モードのバリデーション
+        for (const item of validatedData.items) {
+          if (!item.productName) {
+            throw new Error('直接入力モードでは商品名を入力してください')
+          }
+          if (!item.categoryId) {
+            throw new Error('直接入力モードではカテゴリーを選択してください')
+          }
+          if (!item.unit) {
+            throw new Error('直接入力モードでは単位を入力してください')
+          }
         }
       }
 
@@ -176,59 +220,79 @@ export async function POST(request: Request) {
           deliveryDate: new Date(validatedData.deliveryDate),
           totalAmount,
           status: 'PENDING',
+          inputMode: validatedData.inputMode,
+          purchaseLinkStatus: isDirectMode ? 'UNLINKED' : 'LINKED',
         },
       })
 
-      // Create delivery items in batch
-      const deliveryItemsData = validatedData.items.map(item => ({
-        deliveryId: delivery.id,
-        purchaseId: item.purchaseId,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        amount: item.quantity * item.unitPrice,
-        deliveryDate: item.deliveryDate ? new Date(item.deliveryDate) : null,
-        unit: item.unit || null,
-        taxRate: item.taxRate || 8,
-      }))
+      // Create delivery items
+      if (isDirectMode) {
+        // 直接入力モード: purchaseIdなし
+        const deliveryItemsData = validatedData.items.map(item => ({
+          deliveryId: delivery.id,
+          purchaseId: null,
+          productName: item.productName,
+          categoryId: item.categoryId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          amount: item.quantity * item.unitPrice,
+          deliveryDate: new Date(validatedData.deliveryDate),
+          unit: item.unit || null,
+          taxRate: item.taxRate || 8,
+          notes: item.notes || null,
+        }))
 
-      await tx.deliveryItem.createMany({
-        data: deliveryItemsData,
-      })
+        await tx.deliveryItem.createMany({
+          data: deliveryItemsData,
+        })
+      } else {
+        // 通常モード: 既存の処理
+        const deliveryItemsData = validatedData.items.map(item => ({
+          deliveryId: delivery.id,
+          purchaseId: item.purchaseId!,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          amount: item.quantity * item.unitPrice,
+          deliveryDate: item.deliveryDate ? new Date(item.deliveryDate) : null,
+          unit: item.unit || null,
+          taxRate: item.taxRate || 8,
+        }))
 
-      // Update purchase quantities and status in batch
-      for (const item of validatedData.items) {
-        // Update purchase remaining quantity
-        await tx.purchase.update({
-          where: { id: item.purchaseId },
-          data: {
-            remainingQuantity: {
-              decrement: item.quantity,
-            },
-          },
+        await tx.deliveryItem.createMany({
+          data: deliveryItemsData,
         })
 
-        // Update purchase status based on remaining quantity
-        const updatedPurchase = await tx.purchase.findUnique({
-          where: { id: item.purchaseId },
-          select: { remainingQuantity: true, quantity: true },
-        })
-
-        if (updatedPurchase) {
-          let newStatus: string
-          if (updatedPurchase.remainingQuantity === 0) {
-            newStatus = 'USED'
-          } else if (updatedPurchase.remainingQuantity < updatedPurchase.quantity) {
-            newStatus = 'PARTIAL'
-          } else {
-            // remainingQuantity === quantity (全量残っている)
-            newStatus = 'UNUSED'
-          }
-
-          // Always update status to keep it synchronized with remainingQuantity
+        // Update purchase quantities and status
+        for (const item of validatedData.items) {
           await tx.purchase.update({
-            where: { id: item.purchaseId },
-            data: { status: newStatus },
+            where: { id: item.purchaseId! },
+            data: {
+              remainingQuantity: {
+                decrement: item.quantity,
+              },
+            },
           })
+
+          const updatedPurchase = await tx.purchase.findUnique({
+            where: { id: item.purchaseId! },
+            select: { remainingQuantity: true, quantity: true },
+          })
+
+          if (updatedPurchase) {
+            let newStatus: string
+            if (updatedPurchase.remainingQuantity === 0) {
+              newStatus = 'USED'
+            } else if (updatedPurchase.remainingQuantity < updatedPurchase.quantity) {
+              newStatus = 'PARTIAL'
+            } else {
+              newStatus = 'UNUSED'
+            }
+
+            await tx.purchase.update({
+              where: { id: item.purchaseId! },
+              data: { status: newStatus },
+            })
+          }
         }
       }
 
@@ -255,13 +319,19 @@ export async function POST(request: Request) {
                   },
                 },
               },
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
           },
         },
       })
     }, {
-      maxWait: 20000, // 最大20秒待機
-      timeout: 30000, // 30秒でタイムアウト
+      maxWait: 20000,
+      timeout: 30000,
     })
 
     return NextResponse.json(result, { status: 201 })

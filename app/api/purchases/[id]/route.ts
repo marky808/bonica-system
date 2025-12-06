@@ -104,11 +104,14 @@ export async function PUT(
       remainingQuantity = Math.max(0, remainingQuantity) // Can't be negative
     }
 
+    // Handle productPrefixId: convert empty string to null
+    const resolvedProductPrefixId = productPrefixId === '' ? null : productPrefixId
+
     const updatedPurchase = await prisma.purchase.update({
       where: { id: params.id },
       data: {
         ...(productName && { productName }),
-        ...(productPrefixId !== undefined && { productPrefixId }),
+        ...(resolvedProductPrefixId !== undefined && { productPrefixId: resolvedProductPrefixId }),
         ...(categoryId && { categoryId }),
         ...(quantity && { quantity: parseFloat(quantity), remainingQuantity }),
         ...(unit && { unit }),

@@ -4,16 +4,21 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { MainLayout } from "@/components/layout/main-layout"
 import { DeliveryForm } from "@/components/deliveries/delivery-form"
+import { DirectInputForm } from "@/components/deliveries/direct-input-form"
 import { DeliveryList } from "@/components/deliveries/delivery-list"
 import { DeliveryDetailModal } from "@/components/deliveries/delivery-detail-modal"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Plus, Loader2, FileText } from "lucide-react"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Plus, Loader2, FileText, Package, Edit3 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { apiClient, type Delivery, type GoogleSheetTemplate } from "@/lib/api"
 
+type InputMode = 'NORMAL' | 'DIRECT'
+
 export default function DeliveriesPage() {
   const [showForm, setShowForm] = useState(false)
+  const [inputMode, setInputMode] = useState<InputMode>('NORMAL')
   const [editingDelivery, setEditingDelivery] = useState<Delivery | null>(null)
   const [viewingDelivery, setViewingDelivery] = useState<Delivery | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
@@ -411,11 +416,39 @@ export default function DeliveriesPage() {
 
 
         {showForm ? (
-          <DeliveryForm 
-            onSubmit={handleSubmit} 
-            onCancel={handleCancel} 
-            initialData={editingDelivery || undefined} 
-          />
+          <div className="space-y-4">
+            {/* 入力モード切り替えタブ */}
+            {!editingDelivery && (
+              <div className="flex justify-center">
+                <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as InputMode)} className="w-auto">
+                  <TabsList className="grid w-full grid-cols-2 h-12">
+                    <TabsTrigger value="NORMAL" className="flex items-center gap-2 px-6">
+                      <Package className="h-4 w-4" />
+                      通常モード（在庫から選択）
+                    </TabsTrigger>
+                    <TabsTrigger value="DIRECT" className="flex items-center gap-2 px-6">
+                      <Edit3 className="h-4 w-4" />
+                      直接入力モード
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            )}
+
+            {/* モードに応じたフォーム表示 */}
+            {inputMode === 'NORMAL' ? (
+              <DeliveryForm
+                onSubmit={handleSubmit}
+                onCancel={handleCancel}
+                initialData={editingDelivery || undefined}
+              />
+            ) : (
+              <DirectInputForm
+                onSubmit={handleSubmit}
+                onCancel={handleCancel}
+              />
+            )}
+          </div>
         ) : (
           <DeliveryList 
             deliveries={deliveries}

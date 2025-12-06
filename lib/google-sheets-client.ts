@@ -1,6 +1,21 @@
 import { google } from 'googleapis';
 import { JWT, OAuth2Client } from 'google-auth-library';
 
+/**
+ * 数量をフォーマット: 整数なら小数点なし、小数なら小数点あり
+ * 例: 3.0 → "3", 3.5 → "3.5"
+ */
+function formatQuantity(quantity: number): string | number {
+  if (Number.isInteger(quantity)) {
+    return quantity;
+  }
+  // 小数点以下が0の場合も整数として扱う
+  if (quantity % 1 === 0) {
+    return Math.floor(quantity);
+  }
+  return quantity;
+}
+
 interface GoogleSheetsConfig {
   clientEmail?: string;
   privateKey?: string;
@@ -924,7 +939,7 @@ class GoogleSheetsClient {
         { range: `納品書テンプレート!A${row}`, values: [[item.date]] },           // 日付
         { range: `納品書テンプレート!B${row}`, values: [[item.product_name]] },   // 品名
         { range: `納品書テンプレート!C${row}`, values: [[item.unit_price]] },     // 単価
-        { range: `納品書テンプレート!D${row}`, values: [[item.quantity]] },       // 数量
+        { range: `納品書テンプレート!D${row}`, values: [[formatQuantity(item.quantity)]] },  // 数量（整数なら小数点なし）
         { range: `納品書テンプレート!E${row}`, values: [[item.unit]] },           // 単位
         { range: `納品書テンプレート!F${row}`, values: [[item.tax_rate]] },       // 税率
         // G列（税抜金額）とH列（消費税）はスプレッドシートの数式で自動計算
@@ -1042,7 +1057,7 @@ class GoogleSheetsClient {
         { range: `請求書テンプレート!A${row}`, values: [[item.date]] },           // 日付
         { range: `請求書テンプレート!B${row}`, values: [[item.product_name]] },   // 品名
         { range: `請求書テンプレート!C${row}`, values: [[item.unit_price]] },     // 単価
-        { range: `請求書テンプレート!D${row}`, values: [[item.quantity]] },       // 数量
+        { range: `請求書テンプレート!D${row}`, values: [[formatQuantity(item.quantity)]] },  // 数量（整数なら小数点なし）
         { range: `請求書テンプレート!E${row}`, values: [[item.unit]] },           // 単位
         { range: `請求書テンプレート!F${row}`, values: [[item.tax_rate]] },       // 税率
         // G列（税抜金額）とH列（消費税）はスプレッドシートの数式で自動計算

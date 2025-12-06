@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { TrendingUp, TrendingDown, Package, DollarSign } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { TrendingUp, TrendingDown, Package, DollarSign, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import type { DashboardStats } from "@/types"
 
@@ -50,7 +51,15 @@ export function StatsCards({ stats }: StatsCardsProps) {
       <Link href="/deliveries" className="block">
         <Card className="hover:shadow-md transition-shadow cursor-pointer">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">当月納品金額</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              当月納品金額
+              {stats.unlinkedDeliveriesCount && stats.unlinkedDeliveriesCount > 0 && (
+                <Badge variant="destructive" className="text-xs px-1.5 py-0.5">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  未紐付{stats.unlinkedDeliveriesCount}件
+                </Badge>
+              )}
+            </CardTitle>
             <TrendingUp className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
