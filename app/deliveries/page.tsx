@@ -7,10 +7,11 @@ import { DeliveryForm } from "@/components/deliveries/delivery-form"
 import { DirectInputForm } from "@/components/deliveries/direct-input-form"
 import { DeliveryList } from "@/components/deliveries/delivery-list"
 import { DeliveryDetailModal } from "@/components/deliveries/delivery-detail-modal"
+import { PurchaseLinkModal } from "@/components/deliveries/purchase-link-modal"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Loader2, FileText, Package, Edit3 } from "lucide-react"
+import { Plus, Loader2, FileText, Package, Edit3, Link } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { apiClient, type Delivery, type GoogleSheetTemplate } from "@/lib/api"
 
@@ -22,6 +23,7 @@ export default function DeliveriesPage() {
   const [editingDelivery, setEditingDelivery] = useState<Delivery | null>(null)
   const [viewingDelivery, setViewingDelivery] = useState<Delivery | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showLinkModal, setShowLinkModal] = useState(false)
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -357,7 +359,14 @@ export default function DeliveriesPage() {
           </div>
           {!showForm && (
             <div className="flex gap-2">
-              <Button 
+              <Button
+                onClick={() => setShowLinkModal(true)}
+                variant="outline"
+              >
+                <Link className="h-4 w-4 mr-2" />
+                仕入れ紐付け
+              </Button>
+              <Button
                 onClick={handleCreateGoogleSheetsInvoice}
                 variant="outline"
                 disabled={syncingGoogleSheets || selectedDeliveryIds.length === 0}
@@ -470,6 +479,23 @@ export default function DeliveriesPage() {
           onClose={handleCloseDetailModal}
           onEdit={handleEditFromModal}
           onDelete={handleDeleteFromModal}
+        />
+
+        {/* 仕入れ紐付けモーダル */}
+        <PurchaseLinkModal
+          isOpen={showLinkModal}
+          onClose={() => setShowLinkModal(false)}
+          onLinkComplete={async () => {
+            // 納品リストを更新
+            try {
+              const deliveriesRes = await apiClient.getDeliveries()
+              if (deliveriesRes.data) {
+                setDeliveries(deliveriesRes.data.deliveries)
+              }
+            } catch (err) {
+              console.error('Failed to refresh deliveries:', err)
+            }
+          }}
         />
       </div>
     </MainLayout>

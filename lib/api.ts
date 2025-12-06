@@ -117,11 +117,20 @@ export interface Customer {
 export interface DeliveryItem {
   id: string
   deliveryId: string
-  purchaseId: string
+  purchaseId: string | null
   quantity: number
   unitPrice: number
   amount: number
-  purchase: Purchase
+  unit?: string
+  taxRate?: number
+  productName?: string
+  categoryId?: string
+  notes?: string
+  purchase?: Purchase
+  category?: {
+    id: string
+    name: string
+  }
 }
 
 export interface Delivery {
@@ -130,6 +139,8 @@ export interface Delivery {
   deliveryDate: string
   totalAmount: number
   status: string
+  inputMode?: 'NORMAL' | 'DIRECT'
+  purchaseLinkStatus?: 'LINKED' | 'UNLINKED'
   freeeDeliverySlipId?: string
   freeeInvoiceId?: string
   googleSheetId?: string
@@ -144,6 +155,39 @@ export interface Delivery {
     deliveryAddress: string
   }
   items: DeliveryItem[]
+}
+
+export interface UnlinkedDelivery {
+  id: string
+  customerId: string
+  deliveryDate: string
+  totalAmount: number
+  status: string
+  inputMode: 'DIRECT'
+  purchaseLinkStatus: 'UNLINKED'
+  createdAt: string
+  updatedAt: string
+  customer: {
+    id: string
+    companyName: string
+  }
+  items: Array<{
+    id: string
+    deliveryId: string
+    purchaseId: null
+    quantity: number
+    unitPrice: number
+    amount: number
+    unit?: string
+    taxRate?: number
+    productName?: string
+    categoryId?: string
+    notes?: string
+    category?: {
+      id: string
+      name: string
+    }
+  }>
 }
 
 export interface DeliveriesResponse {
@@ -574,6 +618,28 @@ class ApiClient {
   async deleteDelivery(id: string): Promise<ApiResponse<{ message: string }>> {
     return this.request<{ message: string }>(`/deliveries/${id}`, {
       method: 'DELETE',
+    })
+  }
+
+  // Unlinked deliveries (direct input mode)
+  async getUnlinkedDeliveries(): Promise<ApiResponse<{
+    deliveries: UnlinkedDelivery[]
+    count: number
+  }>> {
+    return this.request('/deliveries/unlinked')
+  }
+
+  // Link purchase to delivery item
+  async linkPurchaseToDeliveryItem(data: {
+    deliveryItemId: string
+    purchaseId: string
+  }): Promise<ApiResponse<{
+    success: boolean
+    deliveryItem: DeliveryItem
+  }>> {
+    return this.request('/deliveries/link-purchase', {
+      method: 'POST',
+      body: JSON.stringify(data),
     })
   }
 

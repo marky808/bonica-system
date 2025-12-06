@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
-import { Edit, Trash2, Truck, Calendar, DollarSign, Building, FileText, Package } from "lucide-react"
+import { Edit, Trash2, Truck, Calendar, DollarSign, Building, FileText, Package, AlertTriangle, Link } from "lucide-react"
 import { type Delivery } from "@/lib/api"
 
 interface DeliveryDetailModalProps {
@@ -104,10 +104,31 @@ export function DeliveryDetailModal({
   }
 
   const getDisplayProductName = (item: any) => {
-    if (item.purchase?.productPrefix?.name) {
+    // 直接入力モード: purchaseがnull
+    if (!item.purchase) {
+      return item.productName || "不明"
+    }
+    // 通常モード: purchaseから取得
+    if (item.purchase.productPrefix?.name) {
       return `${item.purchase.productPrefix.name}${item.purchase.productName}`
     }
-    return item.purchase?.productName || "不明"
+    return item.purchase.productName || "不明"
+  }
+
+  const isDirectInputItem = (item: any) => !item.purchase
+
+  const getItemCategory = (item: any) => {
+    if (item.purchase) {
+      return item.purchase.category?.name
+    }
+    return item.category?.name
+  }
+
+  const getItemUnit = (item: any) => {
+    if (item.purchase) {
+      return item.purchase.unit
+    }
+    return item.unit
   }
 
   const getTotalQuantityByProduct = () => {
@@ -206,14 +227,20 @@ export function DeliveryDetailModal({
                   <div key={index}>
                     <div className="flex items-start justify-between py-3">
                       <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-medium text-lg">{getDisplayProductName(item)}</h4>
-                          <Badge variant="outline">{item.purchase.category?.name}</Badge>
+                          <Badge variant="outline">{getItemCategory(item) || "未分類"}</Badge>
+                          {isDirectInputItem(item) && (
+                            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              仕入れ未紐付け
+                            </Badge>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                           <div>
                             <span className="text-muted-foreground">納品数量:</span>
-                            <p className="font-medium">{item.quantity} {item.purchase.unit}</p>
+                            <p className="font-medium">{item.quantity} {getItemUnit(item) || ""}</p>
                           </div>
                           <div>
                             <span className="text-muted-foreground">単価:</span>
@@ -223,38 +250,56 @@ export function DeliveryDetailModal({
                             <span className="text-muted-foreground">小計:</span>
                             <p className="font-medium text-primary">{formatCurrency(item.amount)}</p>
                           </div>
-                          <div>
-                            <span className="text-muted-foreground">仕入れ先:</span>
-                            <p className="font-medium text-xs">{item.purchase.supplier?.companyName || "不明"}</p>
-                          </div>
+                          {item.purchase ? (
+                            <div>
+                              <span className="text-muted-foreground">仕入れ先:</span>
+                              <p className="font-medium text-xs">{item.purchase.supplier?.companyName || "不明"}</p>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="text-muted-foreground">税率:</span>
+                              <p className="font-medium">{item.taxRate || 8}%</p>
+                            </div>
+                          )}
                         </div>
-                        
-                        {/* 在庫情報 */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-600 mt-2 p-2 bg-gray-50 rounded">
-                          <div>
-                            <span className="text-muted-foreground">元の仕入れ数量:</span>
-                            <p className="font-medium">{item.purchase.quantity} {item.purchase.unit}</p>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">仕入れ単価:</span>
-                            <p className="font-medium">{formatCurrency(item.purchase.unitPrice || (item.purchase.price / item.purchase.quantity))}</p>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">残り在庫:</span>
-                            <p className="font-medium">{item.purchase.remainingQuantity} {item.purchase.unit}</p>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">在庫ステータス:</span>
-                            <p className="font-medium">
-                              {item.purchase.status === 'UNUSED' ? '未使用' : 
-                               item.purchase.status === 'PARTIAL' ? '一部使用' : 
-                               item.purchase.status === 'USED' ? '使用済み' : '不明'}
-                            </p>
-                          </div>
-                        </div>
-                        {item.purchase.expiryDate && (
-                          <div className="text-xs text-muted-foreground">
-                            賞味期限: {formatDate(item.purchase.expiryDate)}
+
+                        {/* 在庫情報（仕入れ紐付け済みの場合のみ表示） */}
+                        {item.purchase && (
+                          <>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-600 mt-2 p-2 bg-gray-50 rounded">
+                              <div>
+                                <span className="text-muted-foreground">元の仕入れ数量:</span>
+                                <p className="font-medium">{item.purchase.quantity} {item.purchase.unit}</p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">仕入れ単価:</span>
+                                <p className="font-medium">{formatCurrency(item.purchase.unitPrice || (item.purchase.price / item.purchase.quantity))}</p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">残り在庫:</span>
+                                <p className="font-medium">{item.purchase.remainingQuantity} {item.purchase.unit}</p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">在庫ステータス:</span>
+                                <p className="font-medium">
+                                  {item.purchase.status === 'UNUSED' ? '未使用' :
+                                   item.purchase.status === 'PARTIAL' ? '一部使用' :
+                                   item.purchase.status === 'USED' ? '使用済み' : '不明'}
+                                </p>
+                              </div>
+                            </div>
+                            {item.purchase.expiryDate && (
+                              <div className="text-xs text-muted-foreground">
+                                賞味期限: {formatDate(item.purchase.expiryDate)}
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* 直接入力モードの場合は備考を表示 */}
+                        {isDirectInputItem(item) && item.notes && (
+                          <div className="text-xs text-muted-foreground mt-2 p-2 bg-yellow-50 rounded">
+                            <span className="font-medium">備考:</span> {item.notes}
                           </div>
                         )}
                       </div>
@@ -294,6 +339,34 @@ export function DeliveryDetailModal({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">入力モード</label>
+                  <p className="text-sm">
+                    {(delivery as any).inputMode === 'DIRECT' ? (
+                      <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                        直接入力
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline">通常（在庫から選択）</Badge>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">仕入れ紐付け</label>
+                  <p className="text-sm">
+                    {(delivery as any).purchaseLinkStatus === 'UNLINKED' ? (
+                      <Badge variant="destructive" className="bg-yellow-500">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        未紐付け
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-green-500">
+                        <Link className="h-3 w-3 mr-1" />
+                        紐付け済み
+                      </Badge>
+                    )}
+                  </p>
+                </div>
                 {delivery.googleSheetId && (
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Google Sheets納品書ID</label>
@@ -304,7 +377,7 @@ export function DeliveryDetailModal({
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Google Sheets URL</label>
                     <p className="text-sm">
-                      <a href={delivery.googleSheetUrl} target="_blank" rel="noopener noreferrer" 
+                      <a href={delivery.googleSheetUrl} target="_blank" rel="noopener noreferrer"
                          className="text-blue-600 hover:text-blue-800 underline">
                         スプレッドシートを開く
                       </a>

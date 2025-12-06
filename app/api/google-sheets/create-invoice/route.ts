@@ -5,11 +5,15 @@ import { prisma } from '@/lib/db';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    let { customerId, startDate, endDate, templateId } = body;
+    let { customerId, billingCustomerId, startDate, endDate, templateId } = body;
 
-    if (!customerId || !startDate || !endDate) {
+    // billingCustomerIdが指定されている場合はそれを請求先として使用
+    // customerId は単一の納品先を指定する場合に使用（後方互換性のため）
+    const targetBillingCustomerId = billingCustomerId || customerId;
+
+    if (!targetBillingCustomerId || !startDate || !endDate) {
       return NextResponse.json(
-        { error: '顧客ID、期間が必要です' },
+        { error: '請求先顧客ID（または顧客ID）、期間が必要です' },
         { status: 400 }
       );
     }
@@ -32,22 +36,39 @@ export async function POST(request: NextRequest) {
       console.log('✅ Using invoice template from environment:', templateId);
     }
 
-    // 顧客情報を取得
-    const customer = await prisma.customer.findUnique({
-      where: { id: customerId }
+    // 請求先顧客情報を取得
+    const billingCustomer = await prisma.customer.findUnique({
+      where: { id: targetBillingCustomerId }
     });
 
-    if (!customer) {
+    if (!billingCustomer) {
       return NextResponse.json(
-        { error: '指定された顧客が見つかりません' },
+        { error: '指定された請求先顧客が見つかりません' },
         { status: 404 }
       );
     }
 
-    // 対象期間の納品データを取得
+    // この請求先に紐付く全ての納品先顧客を取得
+    // 1. 自分自身（billingCustomerIdがnullまたは自分自身を指している）
+    // 2. billingCustomerIdがこの請求先を指している顧客
+    const deliveryCustomers = await prisma.customer.findMany({
+      where: {
+        OR: [
+          { id: targetBillingCustomerId, billingCustomerId: null },
+          { id: targetBillingCustomerId, billingCustomerId: targetBillingCustomerId },
+          { billingCustomerId: targetBillingCustomerId }
+        ]
+      }
+    });
+
+    const deliveryCustomerIds = deliveryCustomers.map(c => c.id);
+    console.log(`📋 Found ${deliveryCustomers.length} delivery customers for billing customer:`,
+      deliveryCustomers.map(c => c.companyName));
+
+    // 対象期間の納品データを取得（全ての納品先から）
     const deliveries = await prisma.delivery.findMany({
       where: {
-        customerId: customerId,
+        customerId: { in: deliveryCustomerIds },
         deliveryDate: {
           gte: new Date(startDate),
           lte: new Date(endDate)
@@ -55,12 +76,23 @@ export async function POST(request: NextRequest) {
         status: 'DELIVERED'
       },
       include: {
+        customer: {
+          select: {
+            id: true,
+            companyName: true
+          }
+        },
         items: {
           include: {
-            purchase: true
+            purchase: true,
+            category: true
           }
         }
-      }
+      },
+      orderBy: [
+        { deliveryDate: 'asc' },
+        { customerId: 'asc' }
+      ]
     });
 
     if (deliveries.length === 0) {
@@ -70,45 +102,53 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 納品データを請求書項目に集約（税率別対応）
-    const itemsMap = new Map<string, {
+    // 納品先が複数あるかどうかを判定
+    const uniqueDeliveryCustomerIds = new Set(deliveries.map(d => d.customerId));
+    const hasMultipleDestinations = uniqueDeliveryCustomerIds.size > 1;
+
+    console.log(`📦 Found ${deliveries.length} deliveries from ${uniqueDeliveryCustomerIds.size} delivery destinations`);
+    console.log(`📋 Multiple destinations: ${hasMultipleDestinations}`);
+
+    // 請求書明細を作成（集約せず、納品ごとに明細表示）
+    // 納品先が複数の場合のみ、各明細に納品先名を含める
+    const items: Array<{
+      date: string;
+      delivery_destination: string;
       description: string;
       quantity: number;
+      unit: string;
       unit_price: number;
-      amount: number;
       tax_rate: number;
       subtotal: number;
       tax_amount: number;
-    }>();
+      amount: number;
+    }> = [];
 
     deliveries.forEach(delivery => {
-      delivery.items.forEach(item => {
-        const key = `${item.purchase.productName}_${item.unitPrice}_${item.taxRate}`;
-        const existing = itemsMap.get(key);
+      const deliveryDate = delivery.deliveryDate.toISOString().split('T')[0];
+      // 納品先が複数の場合のみ納品先名を表示
+      const deliveryDestination = hasMultipleDestinations ? delivery.customer.companyName : '';
 
+      delivery.items.forEach(item => {
+        const productName = item.purchase?.productName || item.productName || '不明';
+        const unit = item.unit || item.purchase?.unit || '';
         const itemSubtotal = item.unitPrice * item.quantity;
         const itemTaxAmount = Math.floor(itemSubtotal * (item.taxRate / 100));
 
-        if (existing) {
-          existing.quantity += item.quantity;
-          existing.subtotal += itemSubtotal;
-          existing.tax_amount += itemTaxAmount;
-          existing.amount += (itemSubtotal + itemTaxAmount);
-        } else {
-          itemsMap.set(key, {
-            description: `${item.purchase.productName} (${delivery.deliveryDate.toISOString().split('T')[0]})`,
-            quantity: item.quantity,
-            unit_price: item.unitPrice,
-            tax_rate: item.taxRate,
-            subtotal: itemSubtotal,
-            tax_amount: itemTaxAmount,
-            amount: itemSubtotal + itemTaxAmount
-          });
-        }
+        items.push({
+          date: deliveryDate,
+          delivery_destination: deliveryDestination,
+          description: productName,
+          quantity: item.quantity,
+          unit: unit,
+          unit_price: item.unitPrice,
+          tax_rate: item.taxRate,
+          subtotal: itemSubtotal,
+          tax_amount: itemTaxAmount,
+          amount: itemSubtotal + itemTaxAmount
+        });
       });
     });
-
-    const items = Array.from(itemsMap.values());
 
     // 税率別集計
     const items8 = items.filter(item => item.tax_rate === 8);
@@ -124,26 +164,39 @@ export async function POST(request: NextRequest) {
     const subtotal = subtotal8 + subtotal10;
     const totalAmount = subtotal + totalTax;
 
-    // 請求書番号を生成
-    const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(customerId).padStart(4, '0')}`;
+    // 請求書番号を生成（請求先顧客IDを使用）
+    const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(targetBillingCustomerId).padStart(4, '0')}`;
 
-    // 支払期日を計算（paymentTermsに基づく）
-    const daysToAdd = customer.paymentTerms === '60days' ? 60 : 30;
+    // 支払期日を計算（請求先顧客のpaymentTermsに基づく）
+    const paymentTerms = billingCustomer.paymentTerms || '30days';
+    const daysToAdd = paymentTerms === '60days' ? 60 : 30;
     const dueDate = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000);
+
+    // 納品先リストを生成（複数の納品先がある場合）
+    const uniqueDeliveryDestinations = [...new Set(deliveries.map(d => d.customer.companyName))];
+    const deliveryDestinationsText = uniqueDeliveryDestinations.length > 1
+      ? `納品先: ${uniqueDeliveryDestinations.join(', ')}`
+      : uniqueDeliveryDestinations.length === 1 && uniqueDeliveryDestinations[0] !== billingCustomer.companyName
+        ? `納品先: ${uniqueDeliveryDestinations[0]}`
+        : '';
 
     // 請求書データを準備
     const invoiceData = {
       invoice_number: invoiceNumber,
       invoice_date: new Date().toISOString().split('T')[0],
       due_date: dueDate.toISOString().split('T')[0],
-      customer_name: customer.companyName,
-      customer_address: customer.deliveryAddress,
-      billing_address: customer.billingAddress || customer.deliveryAddress,
-      invoice_registration_number: customer.invoiceRegistrationNumber || '',
-      billing_cycle: customer.billingCycle || 'monthly',
-      billing_day: customer.billingDay || 31,
-      payment_terms: customer.paymentTerms || '30days',
-      invoice_notes: customer.invoiceNotes || '',
+      // 請求先顧客名
+      customer_name: billingCustomer.companyName,
+      // 請求先住所
+      billing_address: billingCustomer.billingAddress || billingCustomer.deliveryAddress || '',
+      // 適格請求書登録番号（請求先顧客のもの）
+      invoice_registration_number: billingCustomer.invoiceRegistrationNumber || '',
+      // 請求サイクル（請求先顧客の設定）
+      billing_cycle: billingCustomer.billingCycle || 'monthly',
+      billing_day: billingCustomer.billingDay || 31,
+      payment_terms: billingCustomer.paymentTerms || '30days',
+      // 請求書備考（請求先顧客の設定）
+      invoice_notes: billingCustomer.invoiceNotes || '',
       items,
       subtotal_8: subtotal8,
       tax_8: tax8,
@@ -153,7 +206,10 @@ export async function POST(request: NextRequest) {
       subtotal,
       tax_amount: totalTax,
       total_amount: totalAmount,
-      notes: `請求期間: ${startDate} 〜 ${endDate}`
+      // 備考欄に請求期間と納品先リストを記載
+      notes: deliveryDestinationsText
+        ? `請求期間: ${startDate} 〜 ${endDate}\n${deliveryDestinationsText}`
+        : `請求期間: ${startDate} 〜 ${endDate}`
     };
 
     // Google Sheetsクライアントを取得
@@ -162,11 +218,11 @@ export async function POST(request: NextRequest) {
     // Google Sheetsに請求書を作成
     const result = await googleSheetsClient.createInvoiceSheet(invoiceData, templateId);
 
-    // 請求書をデータベースに保存
+    // 請求書をデータベースに保存（請求先顧客に紐付け）
     const invoice = await prisma.invoice.create({
       data: {
         invoice_number: invoiceNumber,
-        customerId: customerId,
+        customerId: targetBillingCustomerId,
         invoiceDate: new Date(),
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),

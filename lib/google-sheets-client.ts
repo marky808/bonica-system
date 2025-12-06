@@ -102,13 +102,16 @@ interface InvoiceData {
   payment_terms?: string;
   invoice_notes?: string;
   items: {
-    description: string;
+    date?: string;              // 日付 (YYYY-MM-DD形式)
+    delivery_destination?: string; // 納品先名
+    description: string;        // 商品名
     quantity: number;
+    unit?: string;              // 単位
     unit_price: number;
-    amount: number;
     tax_rate?: number;
-    subtotal?: number;
-    tax_amount?: number;
+    subtotal?: number;          // 税抜金額
+    tax_amount?: number;        // 消費税額
+    amount: number;             // 税込金額
   }[];
   subtotal_8?: number;
   tax_8?: number;
@@ -737,17 +740,24 @@ class GoogleSheetsClient {
     ];
 
     // 商品明細（A15から開始）
+    // 列構成: A:日付, B:納品先, C:商品名, D:数量, E:単位, F:単価, G:税率(%), H:税抜金額, I:消費税, J:税込金額
     const itemsStartRow = 15;
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
+      // 日付をMM/DD形式に変換（YYYY-MM-DD形式から）
+      const dateFormatted = item.date ? `${item.date.slice(5, 7)}/${item.date.slice(8, 10)}` : '';
+
       updates.push(
-        { range: `A${row}`, values: [[item.description]] },
-        { range: `B${row}`, values: [[item.quantity]] },
-        { range: `C${row}`, values: [[item.unit_price]] },
-        { range: `D${row}`, values: [[item.tax_rate || 10]] },
-        { range: `E${row}`, values: [[item.subtotal || item.amount]] },
-        { range: `F${row}`, values: [[item.tax_amount || 0]] },
-        { range: `G${row}`, values: [[item.amount]] }
+        { range: `A${row}`, values: [[dateFormatted]] },
+        { range: `B${row}`, values: [[item.delivery_destination || '']] },
+        { range: `C${row}`, values: [[item.description]] },
+        { range: `D${row}`, values: [[item.quantity]] },
+        { range: `E${row}`, values: [[item.unit || '']] },
+        { range: `F${row}`, values: [[item.unit_price]] },
+        { range: `G${row}`, values: [[item.tax_rate || 10]] },
+        { range: `H${row}`, values: [[item.subtotal || (item.unit_price * item.quantity)]] },
+        { range: `I${row}`, values: [[item.tax_amount || 0]] },
+        { range: `J${row}`, values: [[item.amount]] }
       );
     });
 

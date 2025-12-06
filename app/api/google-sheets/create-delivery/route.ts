@@ -74,7 +74,8 @@ export async function POST(request: NextRequest) {
         },
         items: {
           include: {
-            purchase: true
+            purchase: true,
+            category: true
           }
         }
       }
@@ -223,11 +224,14 @@ export async function POST(request: NextRequest) {
       items: delivery.items.map(item => {
         const itemSubtotal = item.unitPrice * item.quantity;
         const itemTaxAmount = Math.floor(itemSubtotal * (item.taxRate / 100));
+        // 直接入力モード対応: purchaseがnullの場合はitemから直接取得
+        const productName = item.purchase?.productName || item.productName || '不明';
+        const unit = item.unit || item.purchase?.unit || '';
         return {
-          product_name: item.purchase.productName,
+          product_name: productName,
           delivery_date: item.deliveryDate?.toISOString().split('T')[0] || '',
           quantity: item.quantity,
-          unit: item.unit || '',
+          unit: unit,
           unit_price: item.unitPrice,
           tax_rate: item.taxRate,
           subtotal: itemSubtotal,
