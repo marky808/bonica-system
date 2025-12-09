@@ -724,24 +724,18 @@ class GoogleSheetsClient {
   }
 
   private async updateInvoiceSheet(sheetId: string, data: InvoiceData) {
+    // テンプレート構造に合わせた基本情報の配置
+    // A1: 顧客名, A2: 顧客住所, A3: 請求日, C3: 請求書番号
     const updates = [
-      // 基本情報
-      { range: 'B3', values: [[data.invoice_number]] },
-      { range: 'B4', values: [[data.invoice_date]] },
-      { range: 'B5', values: [[data.due_date]] },
-      { range: 'B6', values: [[data.customer_name]] },
-      { range: 'B7', values: [[data.customer_address || '']] },
-      { range: 'B8', values: [[data.billing_address || '']] },
-      { range: 'B9', values: [[data.invoice_registration_number || '']] },
-      { range: 'B10', values: [[data.billing_cycle || '']] },
-      { range: 'B11', values: [[data.billing_day || '']] },
-      { range: 'B12', values: [[data.payment_terms || '']] },
-      { range: 'B13', values: [[data.invoice_notes || '']] },
+      { range: 'A1', values: [[`${data.customer_name} 御中`]] },
+      { range: 'A2', values: [[data.billing_address || data.customer_address || '']] },
+      { range: 'A3', values: [[data.invoice_date]] },
+      { range: 'C3', values: [[data.invoice_number]] },
     ];
 
-    // 商品明細（A15から開始）
-    // 列構成: A:日付, B:納品先, C:商品名, D:数量, E:単位, F:単価, G:税率(%), H:税抜金額, I:消費税, J:税込金額
-    const itemsStartRow = 15;
+    // 商品明細（10行目から開始、9行目はヘッダー）
+    // テンプレート列構成: A:日付, B:納品先, C:品名, D:単価, E:数量, F:単位, G:税率, H:税抜金額, I:消費税, J:備考
+    const itemsStartRow = 10;
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
       // 日付をMM/DD形式に変換（YYYY-MM-DD形式から）
@@ -751,38 +745,33 @@ class GoogleSheetsClient {
         { range: `A${row}`, values: [[dateFormatted]] },
         { range: `B${row}`, values: [[item.delivery_destination || '']] },
         { range: `C${row}`, values: [[item.description]] },
-        { range: `D${row}`, values: [[item.quantity]] },
-        { range: `E${row}`, values: [[item.unit || '']] },
-        { range: `F${row}`, values: [[item.unit_price]] },
-        { range: `G${row}`, values: [[item.tax_rate || 10]] },
+        { range: `D${row}`, values: [[item.unit_price]] },
+        { range: `E${row}`, values: [[item.quantity]] },
+        { range: `F${row}`, values: [[item.unit || '']] },
+        { range: `G${row}`, values: [[`${item.tax_rate || 8}%`]] },
         { range: `H${row}`, values: [[item.subtotal || (item.unit_price * item.quantity)]] },
         { range: `I${row}`, values: [[item.tax_amount || 0]] },
-        { range: `J${row}`, values: [[item.amount]] }
+        { range: `J${row}`, values: [['']] }  // 備考は空欄
       );
     });
 
-    // 税率別集計（商品明細の下 + 2行）
-    const summaryStartRow = itemsStartRow + data.items.length + 2;
+    // 税率別集計（40行目に配置 - テンプレートの集計エリア）
+    const summaryStartRow = 40;
     updates.push(
-      { range: `B${summaryStartRow}`, values: [['8%対象額']] },
-      { range: `C${summaryStartRow}`, values: [[data.subtotal_8 || 0]] },
-      { range: `B${summaryStartRow + 1}`, values: [['8%消費税']] },
-      { range: `C${summaryStartRow + 1}`, values: [[data.tax_8 || 0]] },
-      { range: `B${summaryStartRow + 2}`, values: [['10%対象額']] },
-      { range: `C${summaryStartRow + 2}`, values: [[data.subtotal_10 || 0]] },
-      { range: `B${summaryStartRow + 3}`, values: [['10%消費税']] },
-      { range: `C${summaryStartRow + 3}`, values: [[data.tax_10 || 0]] },
-      { range: `B${summaryStartRow + 4}`, values: [['小計（税抜）']] },
-      { range: `C${summaryStartRow + 4}`, values: [[data.subtotal]] },
-      { range: `B${summaryStartRow + 5}`, values: [['合計税額']] },
-      { range: `C${summaryStartRow + 5}`, values: [[data.total_tax]] },
-      { range: `B${summaryStartRow + 6}`, values: [['合計金額（税込）']] },
-      { range: `C${summaryStartRow + 6}`, values: [[data.total_amount]] }
+      { range: `A${summaryStartRow}`, values: [['8%対象']] },
+      { range: `H${summaryStartRow}`, values: [[data.subtotal_8 || 0]] },
+      { range: `I${summaryStartRow}`, values: [[data.tax_8 || 0]] },
+      { range: `A${summaryStartRow + 1}`, values: [['10%対象']] },
+      { range: `H${summaryStartRow + 1}`, values: [[data.subtotal_10 || 0]] },
+      { range: `I${summaryStartRow + 1}`, values: [[data.tax_10 || 0]] },
+      { range: `A${summaryStartRow + 2}`, values: [['合計']] },
+      { range: `H${summaryStartRow + 2}`, values: [[data.subtotal]] },
+      { range: `I${summaryStartRow + 2}`, values: [[data.total_tax]] }
     );
 
-    // 備考
+    // 備考（集計の下に配置）
     if (data.notes) {
-      updates.push({ range: `A${summaryStartRow + 9}`, values: [[data.notes]] });
+      updates.push({ range: `A${summaryStartRow + 4}`, values: [[data.notes]] });
     }
 
     // 一括更新
