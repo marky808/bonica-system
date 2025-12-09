@@ -432,6 +432,15 @@ class GoogleSheetsClient {
         }
       }
 
+      // 共有設定を有効化（誰でも閲覧可能に）
+      try {
+        await this.shareSheet(newFileId);
+        console.log('✅ Sheet sharing enabled (anyone with link can view)');
+      } catch (shareError: any) {
+        console.warn('⚠️ Failed to enable sharing, but sheet was created:', shareError.message);
+        // 共有設定の失敗は致命的ではないので続行
+      }
+
       const url = `https://docs.google.com/spreadsheets/d/${newFileId}`;
       console.log('🎉 Delivery sheet creation completed:', { sheetId: newFileId, url });
 
@@ -579,6 +588,15 @@ class GoogleSheetsClient {
             GoogleSheetsErrorCode.UNKNOWN_ERROR
           );
         }
+      }
+
+      // 共有設定を有効化（誰でも閲覧可能に）
+      try {
+        await this.shareSheet(newSheetId);
+        console.log('✅ Sheet sharing enabled (anyone with link can view)');
+      } catch (shareError: any) {
+        console.warn('⚠️ Failed to enable sharing, but sheet was created:', shareError.message);
+        // 共有設定の失敗は致命的ではないので続行
       }
 
       const url = `https://docs.google.com/spreadsheets/d/${newSheetId}`;
