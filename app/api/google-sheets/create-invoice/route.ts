@@ -21,14 +21,14 @@ export async function POST(request: NextRequest) {
     // templateIdが提供されていない場合は、環境変数から取得
     if (!templateId) {
       console.log('🔍 No templateId provided, using environment variable...');
-      templateId = process.env.GOOGLE_SHEETS_INVOICE_TEMPLATE_SHEET_ID;
+      templateId = process.env.GOOGLE_SHEETS_NEW_INVOICE_TEMPLATE_SHEET_ID;
 
       if (!templateId) {
-        console.log('❌ GOOGLE_SHEETS_INVOICE_TEMPLATE_SHEET_ID not set');
+        console.log('❌ GOOGLE_SHEETS_NEW_INVOICE_TEMPLATE_SHEET_ID not set');
         return NextResponse.json(
           {
             error: '請求書用のGoogle Sheetsテンプレートが設定されていません。環境変数を確認してください。',
-            suggestion: 'GOOGLE_SHEETS_INVOICE_TEMPLATE_SHEET_ID環境変数を設定してください。'
+            suggestion: 'GOOGLE_SHEETS_NEW_INVOICE_TEMPLATE_SHEET_ID環境変数を設定してください。'
           },
           { status: 400 }
         );

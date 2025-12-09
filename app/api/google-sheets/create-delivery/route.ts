@@ -23,21 +23,21 @@ export async function POST(request: NextRequest) {
     // templateIdが提供されていない場合は、環境変数から取得
     if (!templateId) {
       console.log('🔍 No templateId provided, using environment variable...');
-      templateId = process.env.GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID;
+      templateId = process.env.GOOGLE_SHEETS_NEW_DELIVERY_TEMPLATE_SHEET_ID;
 
       console.log('🔍 DETAILED ENV CHECK:', {
-        raw: process.env.GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID,
-        length: process.env.GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID?.length,
-        hasNewline: process.env.GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID?.includes('\n'),
-        trimmed: process.env.GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID?.trim(),
+        raw: process.env.GOOGLE_SHEETS_NEW_DELIVERY_TEMPLATE_SHEET_ID,
+        length: process.env.GOOGLE_SHEETS_NEW_DELIVERY_TEMPLATE_SHEET_ID?.length,
+        hasNewline: process.env.GOOGLE_SHEETS_NEW_DELIVERY_TEMPLATE_SHEET_ID?.includes('\n'),
+        trimmed: process.env.GOOGLE_SHEETS_NEW_DELIVERY_TEMPLATE_SHEET_ID?.trim(),
       });
 
       if (!templateId) {
-        console.log('❌ GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID not set');
+        console.log('❌ GOOGLE_SHEETS_NEW_DELIVERY_TEMPLATE_SHEET_ID not set');
         return NextResponse.json(
           {
             error: '納品書用のGoogle Sheetsテンプレートが設定されていません。環境変数を確認してください。',
-            suggestion: 'GOOGLE_SHEETS_DELIVERY_TEMPLATE_SHEET_ID環境変数を設定してください。'
+            suggestion: 'GOOGLE_SHEETS_NEW_DELIVERY_TEMPLATE_SHEET_ID環境変数を設定してください。'
           },
           { status: 400 }
         );
