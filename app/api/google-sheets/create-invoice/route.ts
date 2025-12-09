@@ -258,10 +258,13 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error creating invoice sheet:', error);
-    
+
     let errorMessage = 'Google Sheets請求書の作成に失敗しました';
-    
+    let errorDetails = '';
+
     if (error instanceof Error) {
+      errorDetails = error.message;
+
       if (error.message.includes('DECODER routines') || error.message.includes('JWT')) {
         errorMessage = 'Google Sheets APIの認証に失敗しました。システム管理者にお問い合わせください。';
       } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
@@ -274,9 +277,9 @@ export async function POST(request: NextRequest) {
         errorMessage = 'ネットワークエラーが発生しました。インターネット接続を確認してください。';
       }
     }
-    
+
     return NextResponse.json(
-      { error: errorMessage },
+      { error: errorMessage, details: errorDetails },
       { status: 500 }
     );
   }
