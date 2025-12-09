@@ -164,13 +164,15 @@ export async function POST(request: NextRequest) {
     const subtotal = subtotal8 + subtotal10;
     const totalAmount = subtotal + totalTax;
 
-    // 請求書番号を生成（請求先顧客IDを使用）
-    const invoiceNumber = `INV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(targetBillingCustomerId).padStart(4, '0')}`;
+    // 請求書番号を生成（請求先顧客ID + タイムスタンプで一意性を確保）
+    const now = new Date();
+    const timestamp = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+    const invoiceNumber = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${timestamp}`;
 
     // 支払期日を計算（請求先顧客のpaymentTermsに基づく）
     const paymentTerms = billingCustomer.paymentTerms || '30days';
     const daysToAdd = paymentTerms === '60days' ? 60 : 30;
-    const dueDate = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000);
+    const dueDate = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
 
     // 納品先リストを生成（複数の納品先がある場合）
     const uniqueDeliveryDestinations = [...new Set(deliveries.map(d => d.customer.companyName))];
@@ -183,7 +185,7 @@ export async function POST(request: NextRequest) {
     // 請求書データを準備
     const invoiceData = {
       invoice_number: invoiceNumber,
-      invoice_date: new Date().toISOString().split('T')[0],
+      invoice_date: now.toISOString().split('T')[0],
       due_date: dueDate.toISOString().split('T')[0],
       // 請求先顧客名
       customer_name: billingCustomer.companyName,
@@ -223,9 +225,9 @@ export async function POST(request: NextRequest) {
       data: {
         invoice_number: invoiceNumber,
         customerId: targetBillingCustomerId,
-        invoiceDate: new Date(),
-        month: new Date().getMonth() + 1,
-        year: new Date().getFullYear(),
+        invoiceDate: now,
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
         totalAmount: totalAmount,
         status: 'DRAFT',
         googleSheetId: result.sheetId,
