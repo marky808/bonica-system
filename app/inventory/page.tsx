@@ -27,6 +27,7 @@ interface InventoryItem {
   supplier: string
   status: string
   expiryDate?: string
+  notes?: string | null
 }
 
 interface InventoryStats {
@@ -127,7 +128,8 @@ export default function InventoryPage() {
       '仕入日': item.purchaseDate,
       '仕入先': item.supplier,
       '状態': item.status,
-      '期限': item.expiryDate || ''
+      '期限': item.expiryDate || '',
+      '備考': item.notes || ''
     }))
 
     const headers = Object.keys(csvData[0] || {})
@@ -382,9 +384,19 @@ export default function InventoryPage() {
                           <p className="font-medium">{formatCurrency(item.purchasePrice)}</p>
                         </div>
                         <div>
+                          <span className="text-muted-foreground">仕入れ日:</span>
+                          <p className="font-medium">{item.purchaseDate}</p>
+                        </div>
+                        <div>
                           <span className="text-muted-foreground">消費期限:</span>
                           <p className="font-medium">{item.expiryDate}</p>
                         </div>
+                        {item.notes && (
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">備考:</span>
+                            <p className="font-medium">{item.notes}</p>
+                          </div>
+                        )}
                       </div>
 
                       <div className="pt-2 border-t">
@@ -406,9 +418,11 @@ export default function InventoryPage() {
                       <TableHead>在庫数量</TableHead>
                       <TableHead>単価</TableHead>
                       <TableHead>総額</TableHead>
+                      <TableHead>仕入れ日</TableHead>
                       <TableHead>仕入れ先</TableHead>
                       <TableHead>状態</TableHead>
                       <TableHead>消費期限</TableHead>
+                      <TableHead>備考</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -422,9 +436,11 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell>{formatCurrency(item.purchasePrice)}</TableCell>
                         <TableCell>{formatCurrency(item.totalValue)}</TableCell>
+                        <TableCell>{item.purchaseDate}</TableCell>
                         <TableCell>{item.supplier}</TableCell>
                         <TableCell>{getStatusBadge(item.status)}</TableCell>
                         <TableCell>{item.expiryDate}</TableCell>
+                        <TableCell className="text-muted-foreground">{item.notes || '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
