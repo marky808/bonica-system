@@ -104,6 +104,7 @@ model Purchase {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
   name              String         @default("")
+  notes             String?
   deliveryItems     DeliveryItem[]
   supplier          Supplier       @relation(fields: [supplierId], references: [id])
   category          Category       @relation(fields: [categoryId], references: [id])

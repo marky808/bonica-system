@@ -105,7 +105,8 @@ export async function POST(request: NextRequest) {
       supplierId,
       purchaseDate,
       expiryDate,
-      deliveryFee
+      deliveryFee,
+      notes
     } = data
 
     // Validate required fields
@@ -151,6 +152,7 @@ export async function POST(request: NextRequest) {
         purchaseDate: new Date(purchaseDate),
         expiryDate: expiryDate ? new Date(expiryDate) : null,
         deliveryFee,
+        notes: notes || null,
         status: 'UNUSED',
         remainingQuantity: parseFloat(quantity)
       },

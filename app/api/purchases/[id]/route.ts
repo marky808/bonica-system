@@ -60,7 +60,8 @@ export async function PUT(
       purchaseDate,
       expiryDate,
       deliveryFee,
-      status
+      status,
+      notes
     } = data
 
     // Check if purchase exists
@@ -123,7 +124,8 @@ export async function PUT(
         ...(purchaseDate && { purchaseDate: new Date(purchaseDate) }),
         ...(expiryDate !== undefined && { expiryDate: expiryDate ? new Date(expiryDate) : null }),
         ...(deliveryFee !== undefined && { deliveryFee }),
-        ...(status && { status })
+        ...(status && { status }),
+        ...(notes !== undefined && { notes: notes || null })
       },
       include: {
         category: true,

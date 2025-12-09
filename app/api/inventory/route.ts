@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
         supplier: item.supplier.companyName,
         status,
         expiryDate: item.expiryDate ? item.expiryDate.toISOString().split('T')[0] : null,
+        notes: item.notes || null,
       }
     })
     

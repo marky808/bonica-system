@@ -30,6 +30,7 @@ const purchaseSchema = z.object({
   purchaseDate: z.string().min(1, "仕入れ日を選択してください"),
   expiryDate: z.string().optional(),
   deliveryFee: z.string().optional(),
+  notes: z.string().optional(),
 })
 
 type PurchaseFormData = z.infer<typeof purchaseSchema>
@@ -119,6 +120,7 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
         ? new Date(initialData.expiryDate).toISOString().split("T")[0]
         : "",
       deliveryFee: initialData?.deliveryFee || "",
+      notes: initialData?.notes || "",
     },
   })
 
@@ -143,6 +145,7 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
       purchaseDate: new Date().toISOString().split("T")[0],
       expiryDate: "",
       deliveryFee: "",
+      notes: "",
     })
   }
 
@@ -510,6 +513,26 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
                     />
                   </FormControl>
                   <FormDescription />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* 備考 */}
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>備考</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="その他の特記事項があれば入力してください"
+                      className="min-h-[100px]"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>在庫一覧に表示されます</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

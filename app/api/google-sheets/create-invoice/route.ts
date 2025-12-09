@@ -182,6 +182,11 @@ export async function POST(request: NextRequest) {
         ? `納品先: ${uniqueDeliveryDestinations[0]}`
         : '';
 
+    // 請求対象期間の年月を取得（endDateから）
+    const billingPeriodDate = new Date(endDate);
+    const billingPeriodYear = billingPeriodDate.getFullYear();
+    const billingPeriodMonth = billingPeriodDate.getMonth() + 1;
+
     // 請求書データを準備
     const invoiceData = {
       invoice_number: invoiceNumber,
@@ -199,6 +204,9 @@ export async function POST(request: NextRequest) {
       payment_terms: billingCustomer.paymentTerms || '30days',
       // 請求書備考（請求先顧客の設定）
       invoice_notes: billingCustomer.invoiceNotes || '',
+      // 請求対象期間（シート名に使用）
+      billing_period_year: billingPeriodYear,
+      billing_period_month: billingPeriodMonth,
       items,
       subtotal_8: subtotal8,
       tax_8: tax8,

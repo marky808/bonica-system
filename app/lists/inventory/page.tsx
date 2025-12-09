@@ -25,6 +25,7 @@ interface InventoryItem {
   purchaseDate: string
   status: string
   expiryDate?: string
+  notes?: string
 }
 
 interface InventoryStats {
@@ -326,6 +327,7 @@ export default function InventoryListPage() {
                       <th className="text-left p-3">消費期限</th>
                       <th className="text-left p-3">期限まで</th>
                       <th className="text-center p-3">状態</th>
+                      <th className="text-left p-3">備考</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -346,6 +348,9 @@ export default function InventoryListPage() {
                         </td>
                         <td className="text-center p-3">
                           {getStatusBadge(item.status, item.expiryDate)}
+                        </td>
+                        <td className="p-3 text-sm text-muted-foreground max-w-xs truncate">
+                          {item.notes || '-'}
                         </td>
                       </tr>
                     ))}

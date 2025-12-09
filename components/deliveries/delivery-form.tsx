@@ -154,13 +154,29 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
   }, [debouncedSearchQuery, allPurchases])
 
   const handleSubmit = (data: DeliveryFormData) => {
-    // 在庫チェック
+    // 編集時の元の数量をマップに格納（purchaseId -> 元の数量）
+    const originalQuantities: { [purchaseId: string]: number } = {}
+    if (initialData?.items) {
+      for (const item of initialData.items) {
+        if (item.purchaseId) {
+          originalQuantities[item.purchaseId] = (originalQuantities[item.purchaseId] || 0) + item.quantity
+        }
+      }
+    }
+
+    // 在庫チェック（編集時は元の数量を考慮）
     const stockErrors = []
     for (const [index, item] of data.items.entries()) {
       const purchase = getPurchaseInfo(item.purchaseId)
-      if (purchase && item.quantity > purchase.remainingQuantity) {
-        const displayName = getDisplayProductName(purchase)
-        stockErrors.push(`商品${index + 1}: ${displayName} の在庫が不足しています。在庫: ${purchase.remainingQuantity}${purchase.unit}, 要求: ${item.quantity}${purchase.unit}`)
+      if (purchase) {
+        // 利用可能な在庫 = 現在の残数量 + 元の納品で使っていた数量
+        const originalQty = originalQuantities[item.purchaseId] || 0
+        const availableQuantity = purchase.remainingQuantity + originalQty
+
+        if (item.quantity > availableQuantity) {
+          const displayName = getDisplayProductName(purchase)
+          stockErrors.push(`商品${index + 1}: ${displayName} の在庫が不足しています。利用可能: ${availableQuantity}${purchase.unit}, 要求: ${item.quantity}${purchase.unit}`)
+        }
       }
     }
 
@@ -210,7 +226,19 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
 
   const getMaxQuantity = (purchaseId: string) => {
     const purchase = getPurchaseInfo(purchaseId)
-    return purchase ? purchase.remainingQuantity : 0
+    if (!purchase) return 0
+
+    // 編集時は元の納品で使っていた数量も利用可能
+    let originalQty = 0
+    if (initialData?.items) {
+      for (const item of initialData.items) {
+        if (item.purchaseId === purchaseId) {
+          originalQty += item.quantity
+        }
+      }
+    }
+
+    return purchase.remainingQuantity + originalQty
   }
 
   if (loading) {

@@ -101,6 +101,8 @@ interface InvoiceData {
   billing_day?: number;
   payment_terms?: string;
   invoice_notes?: string;
+  billing_period_year?: number;   // 請求対象年
+  billing_period_month?: number;  // 請求対象月
   items: {
     date?: string;              // 日付 (YYYY-MM-DD形式)
     delivery_destination?: string; // 納品先名
@@ -539,6 +541,46 @@ class GoogleSheetsClient {
             updateError,
             GoogleSheetsErrorCode.UNKNOWN_ERROR
           );
+        }
+
+        // シート名を変更（請求先名_YYYY年MM月）
+        try {
+          const year = data.billing_period_year || new Date().getFullYear();
+          const month = data.billing_period_month || (new Date().getMonth() + 1);
+          const sheetName = `${data.customer_name}_${year}年${month}月`;
+          console.log('📝 Renaming invoice sheet to:', sheetName);
+
+          // Get the first sheet ID
+          const spreadsheet = await this.sheets.spreadsheets.get({
+            spreadsheetId: newSheetId,
+          });
+
+          const firstSheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId;
+
+          if (firstSheetId !== undefined) {
+            await this.sheets.spreadsheets.batchUpdate({
+              spreadsheetId: newSheetId,
+              requestBody: {
+                requests: [
+                  {
+                    updateSheetProperties: {
+                      properties: {
+                        sheetId: firstSheetId,
+                        title: sheetName,
+                      },
+                      fields: 'title',
+                    },
+                  },
+                ],
+              },
+            });
+            console.log('✅ Invoice sheet renamed successfully:', sheetName);
+          } else {
+            console.warn('⚠️ Could not find sheet ID for renaming');
+          }
+        } catch (renameError: any) {
+          console.error('❌ Invoice sheet rename failed (non-critical):', renameError);
+          // シート名の変更は失敗しても続行
         }
       }
       // サービスアカウント認証の場合は空のスプレッドシートを作成
