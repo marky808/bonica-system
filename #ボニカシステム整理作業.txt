@@ -1,0 +1,43 @@
+# ボニカシステム整理作業
+
+分析レポートに基づき、段階的に整理を実行してください。
+各ステップ完了後にgit commitすること。
+
+## Step 1: 未使用パッケージ削除（リスク低）
+
+以下を package.json から削除して npm install:
+- @remix-run/react
+- @sveltejs/kit
+- svelte
+- vue
+- vue-router
+- faker（devDeps）
+
+## Step 2: 未使用ファイル削除
+
+以下を削除:
+- components/auth/login-form.tsx
+- components/deliveries/delivery-history.tsx
+- app/dashboard/layout.tsx
+- app/inventory/loading.tsx
+- app/api/admin/init/route.ts
+- app/api/templates/create/route.ts
+
+## Step 3: 不要APIエンドポイント削除
+
+以下を削除:
+- /api/freee/test
+- /api/sheets-create
+
+※ V1/V2統合は別タスクとして後回し
+
+## Step 4: 動作確認
+
+npm run build が通ることを確認
+
+---
+
+各ステップ完了ごとにcommitメッセージ例:
+- "chore: remove unused npm packages"
+- "chore: remove unused components"
+- "chore: remove unused API endpoints"

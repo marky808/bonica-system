@@ -43,7 +43,9 @@
       "Bash(git commit -m \"$(cat <<''EOF''\n請求書テンプレート構造に合わせてセル配置を修正\n\n- 基本情報: A1顧客名, A2住所, A3請求日, C3請求書番号\n- 明細10行目〜: A日付, B納品先, C品名, D単価, E数量, F単位, G税率, H税抜, I消費税, J備考\n- 集計40行目〜に配置\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git commit -m \"$(cat <<''EOF''\nスプレッドシート作成時に自動で共有設定を有効化\n\n- 納品書・請求書作成後に自動でリンク共有を有効化\n- 誰でも閲覧可能に設定\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(__NEW_LINE__ curl -s -X POST \"https://bonica-system.vercel.app/api/google-sheets/create-invoice\" )",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "WebFetch(domain:doc-0k-9g-sheets.googleusercontent.com)"
     ],
     "deny": [],
     "ask": []
