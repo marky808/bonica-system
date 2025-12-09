@@ -784,14 +784,86 @@ class GoogleSheetsClient {
   }
 
   private async updateInvoiceSheet(sheetId: string, data: InvoiceData) {
-    // テンプレート構造に合わせた基本情報の配置
-    // A1: 顧客名, A2: 顧客住所, A3: 請求日, C3: 請求書番号
-    const updates = [
-      { range: 'A1', values: [[`${data.customer_name} 御中`]] },
-      { range: 'A2', values: [[data.billing_address || data.customer_address || '']] },
-      { range: 'A3', values: [[data.invoice_date]] },
-      { range: 'C3', values: [[data.invoice_number]] },
-    ];
+    console.log('📊 Updating invoice sheet with data:', {
+      customer_name: data.customer_name,
+      invoice_number: data.invoice_number,
+      items_count: data.items.length,
+      subtotal_8: data.subtotal_8,
+      tax_8: data.tax_8,
+      subtotal_10: data.subtotal_10,
+      tax_10: data.tax_10,
+      total_amount: data.total_amount
+    });
+
+    // まずプレースホルダーを置換
+    try {
+      // シートIDを取得
+      const spreadsheet = await this.sheets.spreadsheets.get({
+        spreadsheetId: sheetId,
+      });
+      const firstSheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId || 0;
+
+      // プレースホルダー置換リクエスト
+      const findReplaceRequests = [
+        {
+          findReplace: {
+            find: '{{deliveryDate}}',
+            replacement: data.invoice_date,
+            allSheets: true,
+            matchCase: false,
+            matchEntireCell: false,
+          }
+        },
+        {
+          findReplace: {
+            find: '{{deliveryNumber}}',
+            replacement: data.invoice_number,
+            allSheets: true,
+            matchCase: false,
+            matchEntireCell: false,
+          }
+        },
+        {
+          findReplace: {
+            find: '{{customerName}}',
+            replacement: `${data.customer_name} 御中`,
+            allSheets: true,
+            matchCase: false,
+            matchEntireCell: false,
+          }
+        },
+        {
+          findReplace: {
+            find: '{{customerAddress}}',
+            replacement: data.billing_address || data.customer_address || '',
+            allSheets: true,
+            matchCase: false,
+            matchEntireCell: false,
+          }
+        }
+      ];
+
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          requests: findReplaceRequests
+        }
+      });
+      console.log('✅ Placeholders replaced successfully');
+    } catch (placeholderError: any) {
+      console.error('⚠️ Placeholder replacement failed (non-critical):', placeholderError.message);
+      // プレースホルダー置換が失敗しても続行
+    }
+
+    // セル値の更新
+    const updates: Array<{ range: string; values: any[][] }> = [];
+
+    // 基本情報（プレースホルダーがない場合のフォールバック）
+    // A2: 顧客名, A3: 顧客住所
+    updates.push(
+      { range: 'A2', values: [[`${data.customer_name} 御中`]] },
+      { range: 'A3', values: [[data.billing_address || data.customer_address || '']] },
+    );
 
     // 商品明細（10行目から開始、9行目はヘッダー）
     // テンプレート列構成: A:日付, B:納品先, C:品名, D:単価, E:数量, F:単位, G:税率, H:税抜金額, I:消費税, J:備考
@@ -815,33 +887,57 @@ class GoogleSheetsClient {
       );
     });
 
-    // 税率別集計（40行目に配置 - テンプレートの集計エリア）
-    const summaryStartRow = 40;
+    // 税率別集計（テンプレートの集計エリア: 行53-60）
+    // 行53: 8%対象（C列に金額）
+    // 行54: 消費税8%（C列に金額）
+    // 行55: 10%対象（C列に金額）
+    // 行56: 消費税10%（C列に金額）
+    // 行58: 小計（H列に金額）
+    // 行59: 消費税（H列に金額）
+    // 行60: 合計（H列に金額）
     updates.push(
-      { range: `A${summaryStartRow}`, values: [['8%対象']] },
-      { range: `H${summaryStartRow}`, values: [[data.subtotal_8 || 0]] },
-      { range: `I${summaryStartRow}`, values: [[data.tax_8 || 0]] },
-      { range: `A${summaryStartRow + 1}`, values: [['10%対象']] },
-      { range: `H${summaryStartRow + 1}`, values: [[data.subtotal_10 || 0]] },
-      { range: `I${summaryStartRow + 1}`, values: [[data.tax_10 || 0]] },
-      { range: `A${summaryStartRow + 2}`, values: [['合計']] },
-      { range: `H${summaryStartRow + 2}`, values: [[data.subtotal]] },
-      { range: `I${summaryStartRow + 2}`, values: [[data.total_tax]] }
+      // 8%対象
+      { range: 'C53', values: [[data.subtotal_8 || 0]] },
+      { range: 'C54', values: [[data.tax_8 || 0]] },
+      // 10%対象
+      { range: 'C55', values: [[data.subtotal_10 || 0]] },
+      { range: 'C56', values: [[data.tax_10 || 0]] },
+      // 小計・消費税・合計
+      { range: 'H58', values: [[data.subtotal]] },
+      { range: 'H59', values: [[data.total_tax]] },
+      { range: 'H60', values: [[data.total_amount]] }
+    );
+
+    // 行40-42への書き込みも維持（テンプレートによってはここも使う）
+    updates.push(
+      { range: 'A40', values: [['8%対象']] },
+      { range: 'H40', values: [[data.subtotal_8 || 0]] },
+      { range: 'I40', values: [[data.tax_8 || 0]] },
+      { range: 'A41', values: [['10%対象']] },
+      { range: 'H41', values: [[data.subtotal_10 || 0]] },
+      { range: 'I41', values: [[data.tax_10 || 0]] },
+      { range: 'A42', values: [['合計']] },
+      { range: 'H42', values: [[data.subtotal]] },
+      { range: 'I42', values: [[data.total_tax]] }
     );
 
     // 備考（集計の下に配置）
     if (data.notes) {
-      updates.push({ range: `A${summaryStartRow + 4}`, values: [[data.notes]] });
+      updates.push({ range: 'A44', values: [[data.notes]] });
     }
 
-    // 一括更新
+    console.log('📊 Batch update ranges:', updates.map(u => u.range));
+
+    // 一括更新（USER_ENTEREDで文字化けを防止）
     await this.sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: sheetId,
       requestBody: {
-        valueInputOption: 'RAW',
+        valueInputOption: 'USER_ENTERED',
         data: updates
       }
     });
+
+    console.log('✅ Invoice sheet updated successfully');
   }
 
   async shareSheet(sheetId: string, emails: string[] = []): Promise<void> {
