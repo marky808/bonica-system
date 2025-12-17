@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Search, Filter, Edit, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, Truck, FileText, Download } from "lucide-react"
+import { Search, Filter, Edit, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, Truck, FileText, Download, RotateCcw } from "lucide-react"
 import { apiClient, type Delivery, type Customer } from "@/lib/api"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -46,6 +46,7 @@ export function DeliveryList({
   const [dataLoading, setDataLoading] = useState(false)
   const [error, setError] = useState('')
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [typeFilter, setTypeFilter] = useState("all") // 種別フィルター追加
   const itemsPerPage = 20
 
   // Use ref to track if we've already initialized data
@@ -148,6 +149,25 @@ export function DeliveryList({
     }
   }
 
+  // 種別バッジを取得
+  const getTypeBadge = (delivery: Delivery) => {
+    const type = (delivery as any).type
+    if (type === 'RETURN') {
+      return (
+        <Badge className="bg-red-500 text-white">
+          <RotateCcw className="h-3 w-3 mr-1" />
+          赤伝
+        </Badge>
+      )
+    }
+    return <Badge variant="outline">通常</Badge>
+  }
+
+  // 赤伝かどうかを判定
+  const isReturnDelivery = (delivery: Delivery) => {
+    return (delivery as any).type === 'RETURN'
+  }
+
   const getCustomerName = (delivery: Delivery) => {
     return delivery.customer?.companyName || "不明"
   }
@@ -185,8 +205,9 @@ export function DeliveryList({
     const matchesCustomer = customerFilter === "all" || delivery.customerId === customerFilter
     const matchesStatus = statusFilter === "all" || delivery.status === statusFilter
     const matchesMonth = monthFilter === "all" || delivery.deliveryDate.substring(0, 7) === monthFilter
+    const matchesType = typeFilter === "all" || (delivery as any).type === typeFilter
 
-    return matchesSearch && matchesCustomer && matchesStatus && matchesMonth
+    return matchesSearch && matchesCustomer && matchesStatus && matchesMonth && matchesType
   })
 
   const handleSelectAll = (checked: boolean) => {
@@ -241,6 +262,7 @@ export function DeliveryList({
     setCustomerFilter("all")
     setStatusFilter("all")
     setMonthFilter("all")
+    setTypeFilter("all")
   }
 
   const isMobile = useIsMobile()
@@ -337,7 +359,16 @@ export function DeliveryList({
               </SelectContent>
             </Select>
 
-            <div></div> {/* Empty div for grid alignment */}
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="h-12">
+                <SelectValue placeholder="種別で絞り込み" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">すべての種別</SelectItem>
+                <SelectItem value="NORMAL">通常納品</SelectItem>
+                <SelectItem value="RETURN">赤伝（返品）</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -345,11 +376,14 @@ export function DeliveryList({
           /* モバイル用カード表示 */
           <div className="space-y-4">
             {paginatedDeliveries.map((delivery) => (
-              <Card key={delivery.id} className="p-4">
+              <Card key={delivery.id} className={`p-4 ${isReturnDelivery(delivery) ? 'border-red-300 bg-red-50' : ''}`}>
                 <div className="space-y-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h3 className="font-medium text-lg">{getCustomerName(delivery)}</h3>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-medium text-lg">{getCustomerName(delivery)}</h3>
+                        {getTypeBadge(delivery)}
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {delivery.items.length}品目 - {delivery.items.map(item => getDisplayProductName(item)).join(', ')}
                       </p>
@@ -359,12 +393,12 @@ export function DeliveryList({
 
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="text-muted-foreground">納品日:</span>
+                      <span className="text-muted-foreground">{isReturnDelivery(delivery) ? '返品日:' : '納品日:'}</span>
                       <p className="font-medium">{new Date(delivery.deliveryDate).toLocaleDateString('ja-JP')}</p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">合計金額:</span>
-                      <p className="font-medium">{formatCurrency(delivery.totalAmount)}</p>
+                      <p className={`font-medium ${isReturnDelivery(delivery) ? 'text-red-600' : ''}`}>{formatCurrency(delivery.totalAmount)}</p>
                     </div>
                   </div>
 
@@ -429,12 +463,13 @@ export function DeliveryList({
                 <TableRow>
                   {onSelectionChange && (
                     <TableHead className="w-12">
-                      <Checkbox 
+                      <Checkbox
                         checked={isAllSelected}
                         onCheckedChange={handleSelectAll}
                       />
                     </TableHead>
                   )}
+                  <TableHead className="w-20">種別</TableHead>
                   <TableHead className="cursor-pointer hover:bg-muted" onClick={() => handleSort("deliveryDate")}>
                     納品日 {sortField === "deliveryDate" && (sortDirection === "asc" ? "↑" : "↓")}
                   </TableHead>
@@ -450,16 +485,17 @@ export function DeliveryList({
               </TableHeader>
               <TableBody>
                 {paginatedDeliveries.map((delivery) => (
-                  <TableRow key={delivery.id}>
+                  <TableRow key={delivery.id} className={isReturnDelivery(delivery) ? 'bg-red-50 hover:bg-red-100' : ''}>
                     {onSelectionChange && (
                       <TableCell>
-                        <Checkbox 
+                        <Checkbox
                           checked={selectedIds.includes(delivery.id)}
                           onCheckedChange={(checked) => handleSelectOne(delivery.id, checked as boolean)}
                           disabled={delivery.status === 'INVOICED'}
                         />
                       </TableCell>
                     )}
+                    <TableCell>{getTypeBadge(delivery)}</TableCell>
                     <TableCell>{new Date(delivery.deliveryDate).toLocaleDateString('ja-JP')}</TableCell>
                     <TableCell className="font-medium">{getCustomerName(delivery)}</TableCell>
                     <TableCell>
@@ -476,7 +512,7 @@ export function DeliveryList({
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{formatCurrency(delivery.totalAmount)}</TableCell>
+                    <TableCell className={isReturnDelivery(delivery) ? 'text-red-600 font-medium' : ''}>{formatCurrency(delivery.totalAmount)}</TableCell>
                     <TableCell>{getStatusBadge(delivery.status)}</TableCell>
                     <TableCell>
                       <div className="text-sm text-muted-foreground">

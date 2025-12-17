@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
-import { Edit, Trash2, Truck, Calendar, DollarSign, Building, FileText, Package, AlertTriangle, Link } from "lucide-react"
+import { Edit, Trash2, Truck, Calendar, DollarSign, Building, FileText, Package, AlertTriangle, Link, RotateCcw } from "lucide-react"
 import { type Delivery } from "@/lib/api"
 
 interface DeliveryDetailModalProps {
@@ -117,6 +117,11 @@ export function DeliveryDetailModal({
 
   const isDirectInputItem = (item: any) => !item.purchase
 
+  // 赤伝かどうかを判定
+  const isReturnDelivery = () => {
+    return (delivery as any).type === 'RETURN'
+  }
+
   const getItemCategory = (item: any) => {
     if (item.purchase) {
       return item.purchase.category?.name
@@ -150,9 +155,18 @@ export function DeliveryDetailModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-            <Truck className="h-6 w-6" />
-            納品詳細
+          <DialogTitle className={`text-2xl font-bold flex items-center gap-2 ${isReturnDelivery() ? 'text-red-600' : ''}`}>
+            {isReturnDelivery() ? (
+              <>
+                <RotateCcw className="h-6 w-6" />
+                赤伝（返品）詳細
+              </>
+            ) : (
+              <>
+                <Truck className="h-6 w-6" />
+                納品詳細
+              </>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -188,17 +202,17 @@ export function DeliveryDetailModal({
           </Card>
 
           {/* 納品情報 */}
-          <Card>
+          <Card className={isReturnDelivery() ? 'border-red-300' : ''}>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
-                納品情報
+                {isReturnDelivery() ? '返品情報' : '納品情報'}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">納品日</label>
+                  <label className="text-sm font-medium text-muted-foreground">{isReturnDelivery() ? '返品日' : '納品日'}</label>
                   <p className="text-lg font-semibold">{formatDate(delivery.deliveryDate)}</p>
                 </div>
                 <div>
@@ -207,18 +221,55 @@ export function DeliveryDetailModal({
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">合計金額</label>
-                  <p className="text-2xl font-bold text-primary">{formatCurrency(delivery.totalAmount)}</p>
+                  <p className={`text-2xl font-bold ${isReturnDelivery() ? 'text-red-600' : 'text-primary'}`}>{formatCurrency(delivery.totalAmount)}</p>
                 </div>
               </div>
+
+              {/* 赤伝の場合の追加情報 */}
+              {isReturnDelivery() && (
+                <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-200">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-red-700">種別</label>
+                      <p className="flex items-center gap-2 mt-1">
+                        <Badge className="bg-red-500 text-white">
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                          赤伝（返品）
+                        </Badge>
+                      </p>
+                    </div>
+                    {(delivery as any).returnReason && (
+                      <div>
+                        <label className="text-sm font-medium text-red-700">返品理由</label>
+                        <p className="text-sm mt-1 text-red-800">{(delivery as any).returnReason}</p>
+                      </div>
+                    )}
+                    {(delivery as any).originalDelivery && (
+                      <div>
+                        <label className="text-sm font-medium text-red-700">元の納品</label>
+                        <p className="text-sm mt-1 text-red-800">
+                          {(delivery as any).originalDelivery.deliveryNumber || (delivery as any).originalDeliveryId} -
+                          {formatDate((delivery as any).originalDelivery.deliveryDate)} -
+                          {formatCurrency((delivery as any).originalDelivery.totalAmount)}
+                        </p>
+                      </div>
+                    )}
+                    <div className="text-xs text-red-600 mt-2 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      赤伝の商品は在庫に戻りません（廃棄扱い）
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* 納品商品一覧 */}
-          <Card>
+          <Card className={isReturnDelivery() ? 'border-red-300' : ''}>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                納品商品（{delivery.items.length}品目）
+                {isReturnDelivery() ? '返品商品' : '納品商品'}（{delivery.items.length}品目）
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -339,6 +390,19 @@ export function DeliveryDetailModal({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">種別</label>
+                  <p className="text-sm">
+                    {isReturnDelivery() ? (
+                      <Badge className="bg-red-500 text-white">
+                        <RotateCcw className="h-3 w-3 mr-1" />
+                        赤伝（返品）
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline">通常納品</Badge>
+                    )}
+                  </p>
+                </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">入力モード</label>
                   <p className="text-sm">
