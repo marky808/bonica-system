@@ -567,6 +567,7 @@ class ApiClient {
     month?: string
     status?: string
     search?: string
+    type?: 'NORMAL' | 'RETURN'
   } = {}): Promise<ApiResponse<DeliveriesResponse>> {
     const searchParams = new URLSearchParams()
     

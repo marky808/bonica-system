@@ -5,17 +5,18 @@ import { useRouter } from "next/navigation"
 import { MainLayout } from "@/components/layout/main-layout"
 import { DeliveryForm } from "@/components/deliveries/delivery-form"
 import { DirectInputForm } from "@/components/deliveries/direct-input-form"
+import { ReturnDeliveryForm } from "@/components/deliveries/return-delivery-form"
 import { DeliveryList } from "@/components/deliveries/delivery-list"
 import { DeliveryDetailModal } from "@/components/deliveries/delivery-detail-modal"
 import { PurchaseLinkModal } from "@/components/deliveries/purchase-link-modal"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Loader2, FileText, Package, Edit3, Link } from "lucide-react"
+import { Plus, Loader2, FileText, Package, Edit3, Link, RotateCcw } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { apiClient, type Delivery, type GoogleSheetTemplate } from "@/lib/api"
 
-type InputMode = 'NORMAL' | 'DIRECT'
+type InputMode = 'NORMAL' | 'DIRECT' | 'RETURN'
 
 export default function DeliveriesPage() {
   const [showForm, setShowForm] = useState(false)
@@ -430,14 +431,18 @@ export default function DeliveriesPage() {
             {!editingDelivery && (
               <div className="flex justify-center">
                 <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as InputMode)} className="w-auto">
-                  <TabsList className="grid w-full grid-cols-2 h-12">
-                    <TabsTrigger value="NORMAL" className="flex items-center gap-2 px-6">
+                  <TabsList className="grid w-full grid-cols-3 h-12">
+                    <TabsTrigger value="NORMAL" className="flex items-center gap-2 px-4">
                       <Package className="h-4 w-4" />
-                      通常モード（在庫から選択）
+                      通常モード
                     </TabsTrigger>
-                    <TabsTrigger value="DIRECT" className="flex items-center gap-2 px-6">
+                    <TabsTrigger value="DIRECT" className="flex items-center gap-2 px-4">
                       <Edit3 className="h-4 w-4" />
-                      直接入力モード
+                      直接入力
+                    </TabsTrigger>
+                    <TabsTrigger value="RETURN" className="flex items-center gap-2 px-4 text-red-600 data-[state=active]:text-red-600">
+                      <RotateCcw className="h-4 w-4" />
+                      赤伝登録
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
@@ -445,14 +450,21 @@ export default function DeliveriesPage() {
             )}
 
             {/* モードに応じたフォーム表示 */}
-            {inputMode === 'NORMAL' ? (
+            {inputMode === 'NORMAL' && (
               <DeliveryForm
                 onSubmit={handleSubmit}
                 onCancel={handleCancel}
                 initialData={editingDelivery || undefined}
               />
-            ) : (
+            )}
+            {inputMode === 'DIRECT' && (
               <DirectInputForm
+                onSubmit={handleSubmit}
+                onCancel={handleCancel}
+              />
+            )}
+            {inputMode === 'RETURN' && (
+              <ReturnDeliveryForm
                 onSubmit={handleSubmit}
                 onCancel={handleCancel}
               />
