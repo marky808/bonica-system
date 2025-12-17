@@ -349,6 +349,12 @@ export async function DELETE(
       // 在庫を復元
       console.log('📦 在庫復元開始...')
       for (const item of delivery.items) {
+        // 直接入力モードの場合（purchaseIdがnull）は在庫復元をスキップ
+        if (!item.purchaseId) {
+          console.log(`⏭️ 直接入力アイテム: 在庫復元スキップ (商品名: ${item.productName || '不明'})`)
+          continue
+        }
+
         const beforePurchase = await tx.purchase.findUnique({
           where: { id: item.purchaseId },
           select: { remainingQuantity: true, quantity: true, productName: true },
@@ -381,7 +387,7 @@ export async function DELETE(
           data: { status: newStatus },
         })
 
-        console.log(`✅ ${beforePurchase.productName}: ${item.quantity}${item.purchase?.unit || '個'} 復元 (${beforePurchase.remainingQuantity} → ${restoredQuantity})`)
+        console.log(`✅ ${beforePurchase.productName}: ${item.quantity}${item.unit || '個'} 復元 (${beforePurchase.remainingQuantity} → ${restoredQuantity})`)
       }
 
       // 納品データを削除（DeliveryItemは cascade で自動削除）

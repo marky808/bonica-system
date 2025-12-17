@@ -153,6 +153,11 @@ export function DeliveryList({
   }
 
   const getDisplayProductName = (item: any) => {
+    // 直接入力モードの場合はitem.productNameを使用
+    if (item.productName) {
+      return item.productName
+    }
+    // 通常モードの場合はpurchaseから取得
     if (item.purchase?.productPrefix?.name) {
       return `${item.purchase.productPrefix.name}${item.purchase.productName}`
     }
@@ -461,7 +466,7 @@ export function DeliveryList({
                       <div className="space-y-1">
                         {delivery.items.slice(0, 2).map((item, index) => (
                           <div key={index} className="text-sm">
-                            {getDisplayProductName(item)} ({item.quantity} {item.purchase.unit})
+                            {getDisplayProductName(item)} ({item.quantity} {item.purchase?.unit || item.unit || '個'})
                           </div>
                         ))}
                         {delivery.items.length > 2 && (

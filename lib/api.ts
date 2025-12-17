@@ -587,10 +587,19 @@ class ApiClient {
   async createDelivery(data: {
     customerId: string
     deliveryDate: string
+    inputMode?: 'NORMAL' | 'DIRECT'
     items: Array<{
-      purchaseId: string
+      // 通常モード用
+      purchaseId?: string
+      // 直接入力モード用
+      productName?: string
+      categoryId?: string
+      // 共通
       quantity: number
       unitPrice: number
+      unit?: string
+      taxRate?: number
+      notes?: string
     }>
   }): Promise<ApiResponse<Delivery>> {
     return this.request<Delivery>('/deliveries', {
