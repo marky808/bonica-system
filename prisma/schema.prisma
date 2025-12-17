@@ -131,6 +131,18 @@ model Delivery {
   inputMode           String         @default("NORMAL")
   // 仕入れ紐付けステータス: LINKED(紐付け済み), UNLINKED(未紐付け)
   purchaseLinkStatus  String         @default("LINKED")
+
+  // === 赤伝機能用フィールド ===
+  // 種別: NORMAL(通常納品), RETURN(赤伝/返品)
+  type                String         @default("NORMAL")
+  // 赤伝の場合、元の納品ID（任意）
+  originalDeliveryId  String?
+  originalDelivery    Delivery?      @relation("ReturnRelation", fields: [originalDeliveryId], references: [id])
+  returns             Delivery[]     @relation("ReturnRelation")
+  // 返品理由
+  returnReason        String?
+  // ============================
+
   customer            Customer       @relation(fields: [customerId], references: [id])
   items               DeliveryItem[]
 

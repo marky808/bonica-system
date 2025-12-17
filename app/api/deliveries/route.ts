@@ -30,6 +30,11 @@ const createDeliverySchema = z.object({
   customerId: z.string().min(1, 'お客様を選択してください'),
   deliveryDate: z.string().min(1, '納品日を入力してください'),
   inputMode: z.enum(['NORMAL', 'DIRECT']).default('NORMAL'),
+  // === 赤伝機能用フィールド ===
+  type: z.enum(['NORMAL', 'RETURN']).default('NORMAL'),
+  originalDeliveryId: z.string().optional(), // 赤伝の場合、元の納品ID
+  returnReason: z.string().optional(), // 返品理由
+  // ============================
   items: z.array(z.object({
     purchaseId: z.string().optional(),
     productName: z.string().optional(),
@@ -52,6 +57,7 @@ export async function GET(request: Request) {
     const month = searchParams.get('month') || ''
     const status = searchParams.get('status') || ''
     const search = searchParams.get('search') || ''
+    const type = searchParams.get('type') || '' // 'NORMAL', 'RETURN', or '' (all)
 
     const user = await verifyToken(request)
     if (!user) {
@@ -59,14 +65,14 @@ export async function GET(request: Request) {
     }
 
     const skip = (page - 1) * limit
-    
+
     // Build where clause for filtering
     const whereClause: any = {}
-    
+
     if (customer) {
       whereClause.customerId = customer
     }
-    
+
     if (month) {
       const [year, monthNum] = month.split('-')
       const startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1)
@@ -76,9 +82,14 @@ export async function GET(request: Request) {
         lte: endDate,
       }
     }
-    
+
     if (status) {
       whereClause.status = status
+    }
+
+    // フィルタ: type（NORMAL, RETURN）
+    if (type) {
+      whereClause.type = type
     }
 
     // Search functionality
@@ -125,8 +136,29 @@ export async function GET(request: Request) {
                     name: true,
                   },
                 },
+                productPrefix: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
               },
             },
+            category: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        // 赤伝の場合、元の納品情報を含める
+        originalDelivery: {
+          select: {
+            id: true,
+            deliveryNumber: true,
+            deliveryDate: true,
+            totalAmount: true,
           },
         },
       },
@@ -168,11 +200,26 @@ export async function POST(request: Request) {
     const body = await request.json()
     const validatedData = createDeliverySchema.parse(body)
     const isDirectMode = validatedData.inputMode === 'DIRECT'
+    const isReturn = validatedData.type === 'RETURN'
 
     // Start transaction with timeout configuration
     const result = await prisma.$transaction(async (tx) => {
-      // 通常モードの場合のみ在庫チェック
-      if (!isDirectMode) {
+      // 赤伝の場合、元の納品が存在するか確認（originalDeliveryIdが指定されている場合）
+      if (isReturn && validatedData.originalDeliveryId) {
+        const originalDelivery = await tx.delivery.findUnique({
+          where: { id: validatedData.originalDeliveryId },
+        })
+        if (!originalDelivery) {
+          throw new Error('元の納品データが見つかりません')
+        }
+        // 赤伝の顧客は元の納品と同じである必要がある
+        if (originalDelivery.customerId !== validatedData.customerId) {
+          throw new Error('赤伝の顧客は元の納品と同じ顧客を選択してください')
+        }
+      }
+
+      // 通常モードの場合のみ在庫チェック（赤伝の場合はスキップ）
+      if (!isDirectMode && !isReturn) {
         for (const item of validatedData.items) {
           if (!item.purchaseId) {
             throw new Error('通常モードでは仕入れ商品を選択してください')
@@ -192,8 +239,8 @@ export async function POST(request: Request) {
             )
           }
         }
-      } else {
-        // 直接入力モードのバリデーション
+      } else if (isDirectMode && !isReturn) {
+        // 直接入力モードのバリデーション（赤伝以外）
         for (const item of validatedData.items) {
           if (!item.productName) {
             throw new Error('直接入力モードでは商品名を入力してください')
@@ -205,11 +252,21 @@ export async function POST(request: Request) {
             throw new Error('直接入力モードでは単位を入力してください')
           }
         }
+      } else if (isReturn) {
+        // 赤伝モードのバリデーション
+        for (const item of validatedData.items) {
+          if (!item.productName && !item.purchaseId) {
+            throw new Error('赤伝では商品名または仕入れ商品を指定してください')
+          }
+        }
       }
 
-      // Calculate total amount
+      // Calculate total amount（赤伝の場合はマイナス値）
       const totalAmount = validatedData.items.reduce(
-        (sum, item) => sum + item.quantity * item.unitPrice,
+        (sum, item) => {
+          const amount = item.quantity * item.unitPrice
+          return sum + (isReturn ? -Math.abs(amount) : amount)
+        },
         0
       )
 
@@ -222,11 +279,38 @@ export async function POST(request: Request) {
           status: 'PENDING',
           inputMode: validatedData.inputMode,
           purchaseLinkStatus: isDirectMode ? 'UNLINKED' : 'LINKED',
+          // 赤伝用フィールド
+          type: validatedData.type,
+          originalDeliveryId: validatedData.originalDeliveryId || null,
+          returnReason: validatedData.returnReason || null,
         },
       })
 
       // Create delivery items
-      if (isDirectMode) {
+      if (isReturn) {
+        // 赤伝モード: 数量をマイナスで保存、在庫は変動させない
+        const deliveryItemsData = validatedData.items.map(item => {
+          const qty = -Math.abs(item.quantity) // 必ずマイナス
+          return {
+            deliveryId: delivery.id,
+            purchaseId: item.purchaseId || null,
+            productName: item.productName || null,
+            categoryId: item.categoryId || null,
+            quantity: qty,
+            unitPrice: item.unitPrice,
+            amount: qty * item.unitPrice, // マイナス金額
+            deliveryDate: new Date(validatedData.deliveryDate),
+            unit: item.unit || null,
+            taxRate: item.taxRate || 8,
+            notes: item.notes || null,
+          }
+        })
+
+        await tx.deliveryItem.createMany({
+          data: deliveryItemsData,
+        })
+        // 赤伝の場合は在庫を変動させない（廃棄扱い）
+      } else if (isDirectMode) {
         // 直接入力モード: purchaseIdなし
         const deliveryItemsData = validatedData.items.map(item => ({
           deliveryId: delivery.id,
@@ -262,7 +346,7 @@ export async function POST(request: Request) {
           data: deliveryItemsData,
         })
 
-        // Update purchase quantities and status
+        // Update purchase quantities and status（通常納品のみ）
         for (const item of validatedData.items) {
           await tx.purchase.update({
             where: { id: item.purchaseId! },
