@@ -416,8 +416,11 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                             <div className="text-xs text-green-600 font-medium">
                               単価: {formatCurrency(purchase.unitPrice || (purchase.price && purchase.quantity ? purchase.price / purchase.quantity : 0))}
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-gray-500">
                               仕入れ先: {purchase.supplier?.companyName}
+                            </div>
+                            <div className="text-xs text-orange-600">
+                              仕入れ日: {purchase.purchaseDate ? new Date(purchase.purchaseDate).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '-'}
                             </div>
                           </div>
                         )
