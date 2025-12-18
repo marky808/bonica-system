@@ -851,8 +851,20 @@ class ApiClient {
     endDate?: string
     type?: 'monthly' | 'purchases' | 'deliveries' | 'inventory'
   } = {}): Promise<Blob> {
+    // ALWAYS check localStorage on client side for fresh token (same as request method)
+    if (typeof window !== 'undefined') {
+      const storedToken = localStorage.getItem('auth_token')
+      if (storedToken && storedToken !== this.token) {
+        console.log('🔄 [downloadCsv] Refreshing token from localStorage')
+        this.token = storedToken
+      }
+      if (!storedToken) {
+        console.log('⚠️ [downloadCsv] No token found in localStorage')
+      }
+    }
+
     const searchParams = new URLSearchParams()
-    
+
     Object.entries(params).forEach(([key, value]) => {
       if (value) {
         searchParams.append(key, value.toString())
@@ -860,10 +872,13 @@ class ApiClient {
     })
 
     const url = `${API_BASE_URL}/api/reports/csv${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
-    
+
     const headers: HeadersInit = {}
     if (this.token) {
       headers.Authorization = `Bearer ${this.token}`
+      console.log('🔑 [downloadCsv] Request with token')
+    } else {
+      console.log('⚠️ [downloadCsv] Request without token')
     }
 
     const response = await fetch(url, { headers })
