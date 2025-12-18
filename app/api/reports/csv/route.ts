@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
+// サーバーレス環境でも安全に動作する日時フォーマット関数
+function formatDateTime(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
+}
+
 export async function GET(request: NextRequest) {
   console.log('=== CSV出力API開始 ===')
   
@@ -47,19 +60,23 @@ export async function GET(request: NextRequest) {
     }
     
     console.log(`✅ CSV生成完了: ${filename}`)
-    
+
+    // RFC 5987形式でファイル名をエンコード（日本語対応）
+    const encodedFilename = encodeURIComponent(filename).replace(/'/g, '%27')
+
     return new NextResponse(csvContent, {
       status: 200,
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodedFilename}`,
       },
     })
     
   } catch (error: any) {
     console.error('CSV出力API エラー:', error)
+    console.error('エラースタック:', error.stack)
     return NextResponse.json(
-      { error: error.message || 'CSV出力に失敗しました' },
+      { error: error.message || 'CSV出力に失敗しました', details: error.stack },
       { status: error.message === 'Authentication required' ? 401 : 500 }
     )
   }
@@ -144,7 +161,7 @@ async function generatePurchaseCsv(startDate: Date, endDate: Date) {
     残数量: purchase.remainingQuantity,
     ステータス: purchase.status === 'COMPLETED' ? '完了' : purchase.status === 'PENDING' ? '処理中' : purchase.status,
     消費期限: purchase.expiryDate ? purchase.expiryDate.toISOString().split('T')[0] : '',
-    作成日時: purchase.createdAt.toLocaleString('ja-JP')
+    作成日時: purchase.createdAt.toISOString().slice(0, 19).replace('T', ' ')
   }))
   
   const csv = convertToCSV(purchaseData)
@@ -178,41 +195,85 @@ async function generateDeliveryCsv(startDate: Date, endDate: Date) {
               category: true,
               supplier: true
             }
-          }
+          },
+          category: true
         }
       }
     },
     orderBy: { deliveryDate: 'desc' }
   })
-  
+
+  // 商品名を取得するヘルパー関数（直接入力モード・赤伝対応）
+  const getProductName = (item: any): string => {
+    if (item.productName) return item.productName
+    if (item.purchase) return item.purchase.productName
+    return '不明'
+  }
+
+  // カテゴリ名を取得するヘルパー関数
+  const getCategoryName = (item: any): string => {
+    if (item.category) return item.category.name
+    if (item.purchase?.category) return item.purchase.category.name
+    return '未分類'
+  }
+
+  // 仕入れ先名を取得するヘルパー関数
+  const getSupplierName = (item: any): string => {
+    if (item.purchase?.supplier) return item.purchase.supplier.companyName
+    return '-'
+  }
+
+  // 単位を取得するヘルパー関数
+  const getUnit = (item: any): string => {
+    if (item.unit) return item.unit
+    if (item.purchase?.unit) return item.purchase.unit
+    return '-'
+  }
+
+  // 仕入単価を取得するヘルパー関数
+  const getPurchaseUnitPrice = (item: any): number => {
+    if (item.purchase?.unitPrice) return item.purchase.unitPrice
+    return 0
+  }
+
   const deliveryData = []
-  
+
   for (const delivery of deliveries) {
+    const isReturn = (delivery as any).type === 'RETURN'
+    const typeLabel = isReturn ? '赤伝' : '通常'
+
     for (const item of delivery.items) {
+      const purchaseUnitPrice = getPurchaseUnitPrice(item)
+      // 赤伝や直接入力の場合は粗利計算をスキップ
+      const profit = item.purchase ? item.amount - (item.quantity * purchaseUnitPrice) : 0
+
       deliveryData.push({
         納品ID: delivery.id,
+        種別: typeLabel,
         納品日: delivery.deliveryDate.toISOString().split('T')[0],
         顧客名: delivery.customer.companyName,
-        商品名: item.purchase.productName,
-        カテゴリ: item.purchase.category.name,
-        仕入先: item.purchase.supplier.companyName,
+        商品名: getProductName(item),
+        カテゴリ: getCategoryName(item),
+        仕入先: getSupplierName(item),
         納品数量: item.quantity,
-        単位: item.purchase.unit,
+        単位: getUnit(item),
         納品単価: item.unitPrice,
         納品金額: item.amount,
-        仕入単価: item.purchase.unitPrice,
-        粗利: item.amount - (item.quantity * item.purchase.unitPrice),
-        納品ステータス: delivery.status === 'DELIVERED' ? '納品完了' : 
-                     delivery.status === 'PENDING' ? '処理中' : delivery.status,
+        仕入単価: purchaseUnitPrice || '-',
+        粗利: profit || '-',
+        納品ステータス: delivery.status === 'DELIVERED' ? '納品完了' :
+                     delivery.status === 'PENDING' ? '処理中' :
+                     delivery.status === 'INVOICED' ? '請求済' : delivery.status,
+        返品理由: isReturn ? ((delivery as any).returnReason || '') : '',
         freee請求書ID: delivery.freeeInvoiceId || '',
-        作成日時: delivery.createdAt.toLocaleString('ja-JP')
+        作成日時: delivery.createdAt.toISOString().slice(0, 19).replace('T', ' ')
       })
     }
   }
-  
+
   const csv = convertToCSV(deliveryData)
   const filename = `納品一覧_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}.csv`
-  
+
   return { csv, filename }
 }
 
@@ -265,7 +326,7 @@ async function generateInventoryCsv() {
       消費期限: item.expiryDate ? item.expiryDate.toISOString().split('T')[0] : '',
       期限まで: daysUntilExpiry,
       状態: status,
-      作成日時: item.createdAt.toLocaleString('ja-JP')
+      作成日時: item.createdAt.toISOString().slice(0, 19).replace('T', ' ')
     }
   })
   
