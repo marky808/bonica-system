@@ -72,7 +72,14 @@
       "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWZsb2ppaTYwMDA1MTEzdDVqMXVvdGFrIiwiZW1haWwiOiI4MDh3b3Jrc0BnbWFpbC5jb20iLCJyb2xlIjoiQURNSU4iLCJpYXQiOjE3NjYwMDgyNzYsImV4cCI6MTc2NjYxMzA3Nn0.3peTUmSRX298iv8ayqBBoAsK9aFtwW5vL4D3QjSLa_A\")",
       "Bash(__NEW_LINE__ echo \"=== 既存の納品一覧 ===\")",
       "mcp__playwright__browser_evaluate",
-      "Bash(npx next build)"
+      "Bash(npx next build)",
+      "Bash(git restore:*)",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_network_requests",
+      "mcp__notionApi__API-post-search",
+      "mcp__notionApi__API-post-page",
+      "mcp__notionApi__API-patch-block-children",
+      "Bash(git status:*)"
     ],
     "deny": [],
     "ask": []

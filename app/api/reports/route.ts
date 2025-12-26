@@ -352,37 +352,73 @@ async function getDeliveriesListReport(startDate: Date, endDate: Date) {
               category: true,
               supplier: true
             }
-          }
+          },
+          category: true
         }
       }
     },
     orderBy: { deliveryDate: 'desc' }
   })
-  
-  const formattedDeliveries = deliveries.map(delivery => ({
-    id: delivery.id,
-    deliveryDate: delivery.deliveryDate.toISOString().split('T')[0],
-    customer: delivery.customer.companyName,
-    totalAmount: delivery.totalAmount,
-    status: delivery.status,
-    itemCount: delivery.items.length,
-    items: delivery.items.map(item => ({
-      productName: item.purchase.productName,
-      category: item.purchase.category.name,
-      supplier: item.purchase.supplier.companyName,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      amount: item.amount
-    }))
-  }))
-  
-  console.log(`🚚 納品一覧レポート完了: ${deliveries.length}件`)
-  
+
+  // 商品名を取得するヘルパー関数（直接入力モード・赤伝対応）
+  const getProductName = (item: any): string => {
+    if (item.productName) return item.productName
+    if (item.purchase) return item.purchase.productName
+    return '不明'
+  }
+
+  // カテゴリ名を取得するヘルパー関数
+  const getCategoryName = (item: any): string => {
+    if (item.category) return item.category.name
+    if (item.purchase?.category) return item.purchase.category.name
+    return '未分類'
+  }
+
+  // 仕入れ先名を取得するヘルパー関数
+  const getSupplierName = (item: any): string => {
+    if (item.purchase?.supplier) return item.purchase.supplier.companyName
+    return '-'
+  }
+
+  const formattedDeliveries = deliveries.map(delivery => {
+    const isReturn = (delivery as any).type === 'RETURN'
+
+    return {
+      id: delivery.id,
+      deliveryNumber: (delivery as any).deliveryNumber || '-',
+      deliveryDate: delivery.deliveryDate.toISOString().split('T')[0],
+      customer: delivery.customer.companyName,
+      totalAmount: delivery.totalAmount,
+      status: delivery.status,
+      type: (delivery as any).type || 'NORMAL',
+      typeLabel: isReturn ? '赤伝' : '通常',
+      inputMode: (delivery as any).inputMode || 'NORMAL',
+      returnReason: isReturn ? (delivery as any).returnReason : null,
+      itemCount: delivery.items.length,
+      items: delivery.items.map(item => ({
+        productName: getProductName(item),
+        category: getCategoryName(item),
+        supplier: getSupplierName(item),
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        amount: item.amount
+      }))
+    }
+  })
+
+  // 通常納品と赤伝の件数を集計
+  const normalCount = formattedDeliveries.filter(d => d.type === 'NORMAL').length
+  const returnCount = formattedDeliveries.filter(d => d.type === 'RETURN').length
+
+  console.log(`🚚 納品一覧レポート完了: ${deliveries.length}件 (通常: ${normalCount}, 赤伝: ${returnCount})`)
+
   return NextResponse.json({
     success: true,
     data: {
       deliveries: formattedDeliveries,
-      total: deliveries.length
+      total: deliveries.length,
+      normalCount,
+      returnCount
     }
   })
 }

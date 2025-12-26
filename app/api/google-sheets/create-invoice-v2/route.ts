@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       別請求先設定: !!customer.billingCustomer
     });
 
-    // 対象期間の納品データを取得
+    // 対象期間の納品データを取得（通常納品と赤伝の両方を含む）
     const deliveries = await prisma.delivery.findMany({
       where: {
         customerId: customerId,
@@ -87,7 +87,8 @@ export async function POST(request: NextRequest) {
       include: {
         items: {
           include: {
-            purchase: true
+            purchase: true,
+            category: true
           }
         }
       }
@@ -100,6 +101,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 通常納品と赤伝を分類
+    const normalDeliveries = deliveries.filter(d => (d as any).type !== 'RETURN');
+    const returnDeliveries = deliveries.filter(d => (d as any).type === 'RETURN');
+
+    console.log(`📋 納品データ: 通常 ${normalDeliveries.length}件, 赤伝 ${returnDeliveries.length}件`);
+
     // 日付フォーマット関数（YYYY-MM-DD → MM/DD）
     function formatDateToMMDD(dateString: string): string {
       const date = new Date(dateString);
@@ -108,37 +115,54 @@ export async function POST(request: NextRequest) {
       return `${month}/${day}`;
     }
 
-    // 納品データを請求書項目に集約
-    const itemsMap = new Map<string, {
+    // 商品名を取得するヘルパー関数
+    function getProductName(item: any): string {
+      // 直接入力モードまたは赤伝モードの場合
+      if (item.productName) {
+        return item.productName;
+      }
+      // 通常モード（purchaseから取得）
+      if (item.purchase) {
+        return item.purchase.productName;
+      }
+      return '不明';
+    }
+
+    // 納品データを請求書項目に変換（日付・納品先別に展開）
+    const items: Array<{
       date: string;
+      delivery_destination: string;
       product_name: string;
       unit_price: number;
       quantity: number;
       unit: string;
       tax_rate: string;
-    }>();
+      is_return: boolean;
+    }> = [];
 
     deliveries.forEach(delivery => {
-      delivery.items.forEach(item => {
-        const key = `${item.purchase.productName}_${item.unitPrice}_${item.taxRate}`;
-        const existing = itemsMap.get(key);
+      const isReturn = (delivery as any).type === 'RETURN';
+      const deliveryDestination = customer.companyName; // 納品先名
 
-        if (existing) {
-          existing.quantity += item.quantity;
-        } else {
-          itemsMap.set(key, {
-            date: formatDateToMMDD(delivery.deliveryDate.toISOString()),
-            product_name: item.purchase.productName,
-            unit_price: item.unitPrice,
-            quantity: item.quantity,
-            unit: item.unit || 'kg',
-            tax_rate: item.taxRate === 8 ? '8%' : '10%',
-          });
-        }
+      delivery.items.forEach(item => {
+        const productName = getProductName(item);
+        // 赤伝の場合は商品名に【返品】を付ける
+        const displayProductName = isReturn ? `【返品】${productName}` : productName;
+
+        items.push({
+          date: formatDateToMMDD(delivery.deliveryDate.toISOString()),
+          delivery_destination: deliveryDestination,
+          product_name: displayProductName,
+          unit_price: item.unitPrice,
+          quantity: item.quantity, // 赤伝の場合はマイナス値
+          unit: item.unit || item.purchase?.unit || 'kg',
+          tax_rate: item.taxRate === 8 ? '8%' : '10%',
+          is_return: isReturn
+        });
       });
     });
 
-    const items = Array.from(itemsMap.values());
+    console.log(`📋 請求書明細: ${items.length}件 (うち返品: ${items.filter(i => i.is_return).length}件)`);
 
     // 請求書番号を生成（タイムスタンプを含めて一意にする）
     const timestamp = Date.now().toString(36).toUpperCase().slice(-4);
@@ -148,12 +172,22 @@ export async function POST(request: NextRequest) {
     const invoiceDate = new Date().toISOString().split('T')[0];
 
     // V2データ構造に変換（請求先情報を使用）
+    // Google Sheetsに渡す形式に変換
+    const invoiceItems = items.map(item => ({
+      date: item.date,
+      product_name: item.product_name,
+      unit_price: item.unit_price,
+      quantity: item.quantity,
+      unit: item.unit,
+      tax_rate: item.tax_rate
+    }));
+
     const invoiceDataV2: InvoiceDataV2 = {
       invoice_number: invoiceNumber,
       invoice_date: invoiceDate,
       customer_name: billingCompanyName,
       customer_address: billingAddress,
-      items: items
+      items: invoiceItems
     };
 
     console.log('📋 Prepared invoice data V2:', invoiceDataV2);
@@ -165,18 +199,22 @@ export async function POST(request: NextRequest) {
     const result = await googleSheetsClient.createInvoiceSheetV2(invoiceDataV2, templateId);
 
     // 税率別集計を計算（データベース保存用）
+    // 赤伝のマイナス数量も含めて計算
     const items8 = items.filter(item => item.tax_rate === '8%');
     const items10 = items.filter(item => item.tax_rate === '10%');
 
     const subtotal8 = items8.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
     const subtotal10 = items10.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
 
-    const tax8 = Math.floor(subtotal8 * 0.08);
-    const tax10 = Math.floor(subtotal10 * 0.1);
+    // 税金もマイナスの場合があるので、Math.floorではなくMath.roundを使用
+    const tax8 = Math.round(subtotal8 * 0.08);
+    const tax10 = Math.round(subtotal10 * 0.1);
 
     const totalTax = tax8 + tax10;
     const subtotal = subtotal8 + subtotal10;
     const totalAmount = subtotal + totalTax;
+
+    console.log(`📊 請求金額計算: 小計=${subtotal}, 税8%=${tax8}, 税10%=${tax10}, 合計=${totalAmount}`);
 
     // 請求書をデータベースに保存
     const invoice = await prisma.invoice.create({

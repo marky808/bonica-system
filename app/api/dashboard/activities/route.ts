@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       },
     })
     
-    // 最近の納品を取得
+    // 最近の納品を取得（直接入力モード対応）
     const recentDeliveries = await prisma.delivery.findMany({
       take: Math.ceil(limit / 3),
       orderBy: { createdAt: 'desc' },
@@ -38,9 +38,17 @@ export async function GET(request: NextRequest) {
           }
         },
         items: {
-          include: {
+          select: {
+            id: true,
+            quantity: true,
+            unitPrice: true,
+            amount: true,
+            productName: true,  // 直接入力モード用
+            unit: true,         // 直接入力モード用
             purchase: {
-              include: {
+              select: {
+                productName: true,
+                unit: true,
                 category: true,
               },
             },
@@ -93,8 +101,11 @@ export async function GET(request: NextRequest) {
     for (const delivery of recentDeliveries) {
       const mainItem = delivery.items[0]
       const itemCount = delivery.items.length
+      // 直接入力モードの場合はproductNameを使用、通常モードはpurchase.productNameを使用
+      const productName = mainItem?.productName || mainItem?.purchase?.productName || '商品'
+      const unit = mainItem?.unit || mainItem?.purchase?.unit || '個'
       const description = itemCount === 1
-        ? `${delivery.customer.companyName}へ${mainItem?.purchase.productName || '商品'} ${mainItem?.quantity || 0}${mainItem?.purchase.unit || '個'}納品`
+        ? `${delivery.customer.companyName}へ${productName} ${mainItem?.quantity || 0}${unit}納品`
         : `${delivery.customer.companyName}へ${itemCount}品目納品`
       
       activities.push({
