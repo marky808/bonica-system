@@ -221,22 +221,22 @@ export default function DeliveriesPage() {
     setSyncingGoogleSheets(true)
     setError('')
     setSuccess('')
-    
+
     try {
-      // 請求書用テンプレートを取得
-      const invoiceTemplate = Array.isArray(templates) ? templates.find(t => t.type === 'invoice') : null
-      if (!invoiceTemplate) {
-        setError('請求書用のGoogle Sheetsテンプレートが見つかりません')
-        return
-      }
-      
       // 最初の納品データから顧客IDを取得
       const firstDelivery = Array.isArray(deliveries) ? deliveries.find(d => selectedDeliveryIds.includes(d.id)) : null
       if (!firstDelivery) {
         setError('選択した納品データが見つかりません')
         return
       }
-      
+
+      // 選択した納品の日付範囲を計算
+      const selectedDeliveries = deliveries.filter(d => selectedDeliveryIds.includes(d.id))
+      const deliveryDates = selectedDeliveries.map(d => new Date(d.deliveryDate))
+      const minDate = new Date(Math.min(...deliveryDates.map(d => d.getTime())))
+      const maxDate = new Date(Math.max(...deliveryDates.map(d => d.getTime())))
+
+      // templateIdはAPIが環境変数から自動取得するため省略可能
       const response = await fetch('/api/google-sheets/create-invoice', {
         method: 'POST',
         headers: {
@@ -244,9 +244,9 @@ export default function DeliveriesPage() {
         },
         body: JSON.stringify({
           customerId: firstDelivery.customerId,
-          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30日前
-          endDate: new Date().toISOString().split('T')[0],
-          templateId: invoiceTemplate.templateSheetId
+          startDate: minDate.toISOString().split('T')[0],
+          endDate: maxDate.toISOString().split('T')[0]
+          // templateIdは省略 - APIが環境変数から自動取得
         })
       })
       
