@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
       deliveryCustomers.map(c => c.companyName));
 
     // 対象期間の納品データを取得（全ての納品先から）
+    // DELIVERED または PENDING ステータスの納品を対象とする
     const deliveries = await prisma.delivery.findMany({
       where: {
         customerId: { in: deliveryCustomerIds },
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
           gte: new Date(startDate),
           lte: new Date(endDate)
         },
-        status: 'DELIVERED'
+        status: { in: ['DELIVERED', 'PENDING'] }
       },
       include: {
         customer: {
