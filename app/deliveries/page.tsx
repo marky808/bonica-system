@@ -12,7 +12,15 @@ import { PurchaseLinkModal } from "@/components/deliveries/purchase-link-modal"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Loader2, FileText, Package, Edit3, Link, RotateCcw } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Plus, Loader2, FileText, Package, Edit3, Link, RotateCcw, AlertTriangle } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { apiClient, type Delivery, type GoogleSheetTemplate } from "@/lib/api"
 
@@ -32,6 +40,8 @@ export default function DeliveriesPage() {
   const [selectedDeliveryIds, setSelectedDeliveryIds] = useState<string[]>([])
   const [syncingGoogleSheets, setSyncingGoogleSheets] = useState(false)
   const [templates, setTemplates] = useState<GoogleSheetTemplate[]>([])
+  const [showInvoiceConfirmDialog, setShowInvoiceConfirmDialog] = useState(false)
+  const [pendingDeliveriesCount, setPendingDeliveriesCount] = useState(0)
   const { isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
 
@@ -212,12 +222,30 @@ export default function DeliveriesPage() {
   }
 
 
-  const handleCreateGoogleSheetsInvoice = async () => {
+  // 請求書作成ボタンクリック時のハンドラ
+  const handleCreateGoogleSheetsInvoiceClick = () => {
     if (selectedDeliveryIds.length === 0) {
       setError('請求書を作成する納品を選択してください')
       return
     }
 
+    // 選択した納品のうち、納品書未発行（PENDING）のものをカウント
+    const selectedDeliveries = deliveries.filter(d => selectedDeliveryIds.includes(d.id))
+    const pendingCount = selectedDeliveries.filter(d => d.status === 'PENDING').length
+
+    if (pendingCount > 0) {
+      // 納品書未発行のものがある場合は確認ダイアログを表示
+      setPendingDeliveriesCount(pendingCount)
+      setShowInvoiceConfirmDialog(true)
+    } else {
+      // 全て納品書発行済みの場合は直接作成
+      handleCreateGoogleSheetsInvoice()
+    }
+  }
+
+  // 実際に請求書を作成する関数
+  const handleCreateGoogleSheetsInvoice = async () => {
+    setShowInvoiceConfirmDialog(false)
     setSyncingGoogleSheets(true)
     setError('')
     setSuccess('')
@@ -249,9 +277,9 @@ export default function DeliveriesPage() {
           // templateIdは省略 - APIが環境変数から自動取得
         })
       })
-      
+
       const result = await response.json()
-      
+
       if (result.success) {
         setSuccess(`Google Sheets請求書を作成しました: ${result.url}`)
         setSelectedDeliveryIds([])
@@ -368,7 +396,7 @@ export default function DeliveriesPage() {
                 仕入れ紐付け
               </Button>
               <Button
-                onClick={handleCreateGoogleSheetsInvoice}
+                onClick={handleCreateGoogleSheetsInvoiceClick}
                 variant="outline"
                 disabled={syncingGoogleSheets || selectedDeliveryIds.length === 0}
               >
@@ -509,6 +537,39 @@ export default function DeliveriesPage() {
             }
           }}
         />
+
+        {/* 納品書未発行の確認ダイアログ */}
+        <Dialog open={showInvoiceConfirmDialog} onOpenChange={setShowInvoiceConfirmDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                納品書未発行の納品があります
+              </DialogTitle>
+              <DialogDescription className="pt-2">
+                選択した{selectedDeliveryIds.length}件の納品のうち、
+                <span className="font-semibold text-yellow-600">{pendingDeliveriesCount}件</span>
+                は納品書が発行されていません（ステータス：処理中）。
+                <br /><br />
+                納品書を発行せずに請求書を作成しますか？
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => setShowInvoiceConfirmDialog(false)}
+              >
+                キャンセル
+              </Button>
+              <Button
+                onClick={handleCreateGoogleSheetsInvoice}
+                className="bg-yellow-500 hover:bg-yellow-600"
+              >
+                請求書を発行する
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   )
