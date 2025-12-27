@@ -39,6 +39,7 @@ export default function DeliveriesPage() {
   const [success, setSuccess] = useState('')
   const [selectedDeliveryIds, setSelectedDeliveryIds] = useState<string[]>([])
   const [syncingGoogleSheets, setSyncingGoogleSheets] = useState(false)
+  const [creatingType, setCreatingType] = useState<'delivery' | 'invoice' | null>(null)
   const [templates, setTemplates] = useState<GoogleSheetTemplate[]>([])
   const [showInvoiceConfirmDialog, setShowInvoiceConfirmDialog] = useState(false)
   const [pendingDeliveriesCount, setPendingDeliveriesCount] = useState(0)
@@ -247,6 +248,7 @@ export default function DeliveriesPage() {
   const handleCreateGoogleSheetsInvoice = async () => {
     setShowInvoiceConfirmDialog(false)
     setSyncingGoogleSheets(true)
+    setCreatingType('invoice')
     setError('')
     setSuccess('')
 
@@ -295,12 +297,14 @@ export default function DeliveriesPage() {
       setError('Google Sheets請求書作成でエラーが発生しました')
     } finally {
       setSyncingGoogleSheets(false)
+      setCreatingType(null)
     }
   }
 
 
   const handleCreateGoogleSheetsDelivery = async (deliveryId: string) => {
     setSyncingGoogleSheets(true)
+    setCreatingType('delivery')
     setError('')
     setSuccess('')
 
@@ -361,6 +365,7 @@ export default function DeliveriesPage() {
       setError(`Google Sheets納品書作成でエラーが発生しました: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSyncingGoogleSheets(false)
+      setCreatingType(null)
     }
   }
 
@@ -568,6 +573,23 @@ export default function DeliveriesPage() {
                 請求書を発行する
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* 作成中モーダル */}
+        <Dialog open={syncingGoogleSheets} onOpenChange={() => {}}>
+          <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+            <div className="flex flex-col items-center justify-center py-8 gap-4">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              <DialogTitle className="text-xl font-semibold">
+                {creatingType === 'delivery' ? '納品書作成中...' : '請求書作成中...'}
+              </DialogTitle>
+              <DialogDescription className="text-center text-muted-foreground">
+                Google Sheetsに{creatingType === 'delivery' ? '納品書' : '請求書'}を作成しています。
+                <br />
+                しばらくお待ちください。
+              </DialogDescription>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
