@@ -3,16 +3,16 @@ import { JWT, OAuth2Client } from 'google-auth-library';
 
 /**
  * 数量をフォーマット: 整数なら小数点なし、小数なら小数点あり
- * 例: 3.0 → "3", 3.5 → "3.5"
+ * 例: 3.0 → 3, 3.5 → 3.5, 20.0 → 20
+ * Google Sheets APIに渡す際に「20.」のようにドットが付かないよう、
+ * 整数の場合は Math.trunc() で確実に整数型を返す
  */
-function formatQuantity(quantity: number): string | number {
-  if (Number.isInteger(quantity)) {
-    return quantity;
-  }
-  // 小数点以下が0の場合も整数として扱う
+function formatQuantity(quantity: number): number {
+  // 小数点以下が0の場合（20.0など）は整数として扱う
   if (quantity % 1 === 0) {
-    return Math.floor(quantity);
+    return Math.trunc(quantity);
   }
+  // 小数点以下がある場合（3.5など）はそのまま返す
   return quantity;
 }
 
@@ -1152,6 +1152,27 @@ class GoogleSheetsClient {
         const firstSheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId || 0;
 
         const formatRequests = [
+          // D列（数量）の数値形式を設定 - 整数は小数点なし、小数は表示
+          {
+            repeatCell: {
+              range: {
+                sheetId: firstSheetId,
+                startRowIndex: 10,  // 11行目から（0インデックスなので10）
+                endRowIndex: 10 + data.items.length,  // アイテム数分
+                startColumnIndex: 3,  // D列
+                endColumnIndex: 4
+              },
+              cell: {
+                userEnteredFormat: {
+                  numberFormat: {
+                    type: 'NUMBER',
+                    pattern: '#,##0.###'  // 整数は小数点なし、小数は最大3桁表示
+                  }
+                }
+              },
+              fields: 'userEnteredFormat.numberFormat'
+            }
+          },
           // C7のフォーマット（ラベル）
           {
             repeatCell: {
@@ -1695,7 +1716,7 @@ class GoogleSheetsClient {
             right: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
           }
         },
-        // E列（数量）のフォーマットを整数に設定（明細行）
+        // E列（数量）の数値形式を設定 - 整数は小数点なし、小数は表示（明細行）
         {
           repeatCell: {
             range: {
@@ -1709,7 +1730,7 @@ class GoogleSheetsClient {
               userEnteredFormat: {
                 numberFormat: {
                   type: 'NUMBER',
-                  pattern: '0'
+                  pattern: '#,##0.###'  // 整数は小数点なし、小数は最大3桁表示
                 }
               }
             },
