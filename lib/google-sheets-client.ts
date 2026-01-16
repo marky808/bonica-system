@@ -1106,11 +1106,11 @@ class GoogleSheetsClient {
       { range: 'C4', values: [[`納品書番号: ${data.delivery_number}`]] }
     );
 
-    // 合計金額を上部に表示（C7:D7）- 請求書と同様のレイアウト
+    // 合計金額を上部に表示（A7:B7）- 各セルに黒枠
     if (data.total_amount !== undefined) {
       updates.push(
-        { range: 'C7', values: [['ご納品金額']] },
-        { range: 'D7', values: [[`¥${data.total_amount.toLocaleString()}`]] }
+        { range: 'A7', values: [['合計金額']] },
+        { range: 'B7', values: [[`¥${data.total_amount.toLocaleString()}`]] }
       );
     }
 
@@ -1183,19 +1183,19 @@ class GoogleSheetsClient {
       }
     });
 
-    // 合計金額の書式設定（請求書と同様）
+    // 合計金額の書式設定（A7:B7、各セルに黒枠）
     if (data.total_amount !== undefined) {
       try {
         const formatRequests = [
-          // C7のフォーマット（ラベル）
+          // A7のフォーマット（ラベル「合計金額」）
           {
             repeatCell: {
               range: {
                 sheetId: firstSheetId,
                 startRowIndex: 6,
                 endRowIndex: 7,
-                startColumnIndex: 2,  // C列
-                endColumnIndex: 3
+                startColumnIndex: 0,  // A列
+                endColumnIndex: 1
               },
               cell: {
                 userEnteredFormat: {
@@ -1203,22 +1203,22 @@ class GoogleSheetsClient {
                     fontSize: 14,
                     bold: true
                   },
-                  horizontalAlignment: 'LEFT',
+                  horizontalAlignment: 'CENTER',
                   verticalAlignment: 'MIDDLE'
                 }
               },
               fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
             }
           },
-          // D7のフォーマット（金額）
+          // B7のフォーマット（金額）
           {
             repeatCell: {
               range: {
                 sheetId: firstSheetId,
                 startRowIndex: 6,
                 endRowIndex: 7,
-                startColumnIndex: 3,  // D列
-                endColumnIndex: 4
+                startColumnIndex: 1,  // B列
+                endColumnIndex: 2
               },
               cell: {
                 userEnteredFormat: {
@@ -1226,22 +1226,38 @@ class GoogleSheetsClient {
                     fontSize: 16,
                     bold: true
                   },
-                  horizontalAlignment: 'LEFT',
+                  horizontalAlignment: 'CENTER',
                   verticalAlignment: 'MIDDLE'
                 }
               },
               fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
             }
           },
-          // C7:D7に枠線を追加
+          // A7に黒枠を追加
           {
             updateBorders: {
               range: {
                 sheetId: firstSheetId,
                 startRowIndex: 6,
                 endRowIndex: 7,
-                startColumnIndex: 2,  // C列
-                endColumnIndex: 4     // D列まで
+                startColumnIndex: 0,  // A列
+                endColumnIndex: 1
+              },
+              top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+              bottom: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+              left: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+              right: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
+            }
+          },
+          // B7に黒枠を追加
+          {
+            updateBorders: {
+              range: {
+                sheetId: firstSheetId,
+                startRowIndex: 6,
+                endRowIndex: 7,
+                startColumnIndex: 1,  // B列
+                endColumnIndex: 2
               },
               top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
               bottom: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
