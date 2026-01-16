@@ -1133,6 +1133,47 @@ class GoogleSheetsClient {
 
     console.log('📊 Batch update ranges V2:', updates.map(u => u.range));
 
+    // シートIDを取得（フォーマット設定に必要）
+    const spreadsheet = await this.sheets.spreadsheets.get({
+      spreadsheetId: spreadsheetId,
+    });
+    const firstSheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId || 0;
+    console.log('📊 Sheet ID for formatting:', firstSheetId);
+
+    // D列のフォーマットをクリアしてから値を書き込む
+    // テンプレートの「20.」フォーマット問題を回避
+    try {
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              repeatCell: {
+                range: {
+                  sheetId: firstSheetId,
+                  startRowIndex: 10,
+                  endRowIndex: 10 + data.items.length,
+                  startColumnIndex: 3,  // D列
+                  endColumnIndex: 4
+                },
+                cell: {
+                  userEnteredFormat: {
+                    numberFormat: {
+                      type: 'TEXT'  // テキスト形式に設定して数値フォーマットをクリア
+                    }
+                  }
+                },
+                fields: 'userEnteredFormat.numberFormat'
+              }
+            }
+          ]
+        }
+      });
+      console.log('✅ D column format cleared to TEXT');
+    } catch (clearError: any) {
+      console.warn('⚠️ Failed to clear D column format:', clearError.message);
+    }
+
     // 一括更新
     await this.sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: spreadsheetId,
@@ -1145,34 +1186,7 @@ class GoogleSheetsClient {
     // 合計金額の書式設定（請求書と同様）
     if (data.total_amount !== undefined) {
       try {
-        // シートIDを取得
-        const spreadsheet = await this.sheets.spreadsheets.get({
-          spreadsheetId: spreadsheetId,
-        });
-        const firstSheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId || 0;
-
         const formatRequests = [
-          // D列（数量）の数値形式を設定 - 整数は小数点なし、小数は表示
-          {
-            repeatCell: {
-              range: {
-                sheetId: firstSheetId,
-                startRowIndex: 10,  // 11行目から（0インデックスなので10）
-                endRowIndex: 10 + data.items.length,  // アイテム数分
-                startColumnIndex: 3,  // D列
-                endColumnIndex: 4
-              },
-              cell: {
-                userEnteredFormat: {
-                  numberFormat: {
-                    type: 'NUMBER',
-                    pattern: '#,##0.###'  // 整数は小数点なし、小数は最大3桁表示
-                  }
-                }
-              },
-              fields: 'userEnteredFormat.numberFormat'
-            }
-          },
           // C7のフォーマット（ラベル）
           {
             repeatCell: {
