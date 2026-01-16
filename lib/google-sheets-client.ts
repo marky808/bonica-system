@@ -1601,6 +1601,41 @@ class GoogleSheetsClient {
       console.error('⚠️ Placeholder replacement failed (non-critical):', placeholderError.message);
     }
 
+    // E列（数量）のフォーマットをクリアしてから値を書き込む
+    // テンプレートの「20.」フォーマット問題を回避
+    const itemsStartRow = 11;
+    try {
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              repeatCell: {
+                range: {
+                  sheetId: sheetId,
+                  startRowIndex: itemsStartRow - 1,  // 10 (11行目、0-indexed)
+                  endRowIndex: itemsStartRow - 1 + data.items.length,
+                  startColumnIndex: 4,  // E列
+                  endColumnIndex: 5
+                },
+                cell: {
+                  userEnteredFormat: {
+                    numberFormat: {
+                      type: 'TEXT'  // テキスト形式に設定して数値フォーマットをクリア
+                    }
+                  }
+                },
+                fields: 'userEnteredFormat.numberFormat'
+              }
+            }
+          ]
+        }
+      });
+      console.log('✅ E column format cleared to TEXT before writing values');
+    } catch (clearError: any) {
+      console.warn('⚠️ Failed to clear E column format:', clearError.message);
+    }
+
     const updates: Array<{ range: string; values: any[][] }> = [];
 
     // 顧客情報（2-4行目、左側）
@@ -1620,7 +1655,6 @@ class GoogleSheetsClient {
     }
 
     // 明細データ（11行目から開始、10列構造）
-    const itemsStartRow = 11;
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
       updates.push(
