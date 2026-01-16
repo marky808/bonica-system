@@ -2,17 +2,17 @@ import { google } from 'googleapis';
 import { JWT, OAuth2Client } from 'google-auth-library';
 
 /**
- * 数量をフォーマット: 整数なら小数点なし、小数なら小数点あり
- * 例: 3.0 → 3, 3.5 → 3.5, 20.0 → 20
+ * 数量をフォーマット: 整数なら文字列、小数なら数値として返す
+ * 例: 3.0 → "3", 3.5 → 3.5, 20.0 → "20"
  * Google Sheets APIに渡す際に「20.」のようにドットが付かないよう、
- * 整数の場合は Math.trunc() で確実に整数型を返す
+ * 整数の場合は文字列として返す（Google Sheetsは自動的に数値として認識する）
  */
-function formatQuantity(quantity: number): number {
-  // 小数点以下が0の場合（20.0など）は整数として扱う
+function formatQuantity(quantity: number): string | number {
+  // 小数点以下が0の場合（20.0など）は文字列として返す
   if (quantity % 1 === 0) {
-    return Math.trunc(quantity);
+    return String(Math.trunc(quantity));
   }
-  // 小数点以下がある場合（3.5など）はそのまま返す
+  // 小数点以下がある場合（3.5など）はそのまま数値で返す
   return quantity;
 }
 
