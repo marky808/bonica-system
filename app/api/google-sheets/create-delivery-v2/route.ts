@@ -7,7 +7,7 @@ import { prisma } from '@/lib/db';
  */
 export async function POST(request: NextRequest) {
   let deliveryId: string = '';
-  let templateId: string = '';
+  let templateId: string | undefined = '';
 
   try {
     const body = await request.json();
@@ -118,6 +118,7 @@ export async function POST(request: NextRequest) {
     }
 
     // V2データ構造に変換
+    // 直接入力モードの場合は item.productName を使用、通常モードは item.purchase.productName を使用
     const deliveryDataV2: DeliveryDataV2 = {
       delivery_number: deliveryNumber,
       delivery_date: delivery.deliveryDate.toISOString().split('T')[0],
@@ -125,13 +126,15 @@ export async function POST(request: NextRequest) {
       customer_address: delivery.customer.deliveryAddress,
       items: delivery.items.map(item => ({
         date: formatDateToMMDD(item.deliveryDate?.toISOString() || delivery.deliveryDate.toISOString()),
-        product_name: item.purchase.productName,
+        product_name: item.purchase?.productName || item.productName || '商品名なし',
         unit_price: item.unitPrice,
         quantity: item.quantity, // 整数の場合は10、小数の場合は10.5のように自然な形で
         unit: item.unit || 'kg',
         tax_rate: item.taxRate === 8 ? '8%' : '10%',
         notes: ''
-      }))
+      })),
+      // 合計金額（税込）を追加 - シート上部に大きく表示される
+      total_amount: delivery.totalAmount
     };
 
     console.log('📋 Prepared delivery data V2:', deliveryDataV2);

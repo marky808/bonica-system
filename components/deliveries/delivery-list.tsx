@@ -257,12 +257,39 @@ export function DeliveryList({
   const startIndex = (currentPage - 1) * itemsPerPage
   const paginatedDeliveries = sortedDeliveries.slice(startIndex, startIndex + itemsPerPage)
 
+  // フィルター変更ハンドラー（ページを1にリセット）
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value)
+    setCurrentPage(1)
+  }
+
+  const handleMonthFilterChange = (value: string) => {
+    setMonthFilter(value)
+    setCurrentPage(1)
+  }
+
+  const handleCustomerFilterChange = (value: string) => {
+    setCustomerFilter(value)
+    setCurrentPage(1)
+  }
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value)
+    setCurrentPage(1)
+  }
+
+  const handleTypeFilterChange = (value: string) => {
+    setTypeFilter(value)
+    setCurrentPage(1)
+  }
+
   const clearFilters = () => {
     setSearchQuery("")
     setCustomerFilter("all")
     setStatusFilter("all")
     setMonthFilter("all")
     setTypeFilter("all")
+    setCurrentPage(1)
   }
 
   const isMobile = useIsMobile()
@@ -299,7 +326,7 @@ export function DeliveryList({
               <Input
                 placeholder="お客様名、商品名で検索..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="pl-10 h-12"
               />
             </div>
@@ -310,7 +337,7 @@ export function DeliveryList({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Select value={monthFilter} onValueChange={setMonthFilter}>
+            <Select value={monthFilter} onValueChange={handleMonthFilterChange}>
               <SelectTrigger className="h-12">
                 <SelectValue placeholder="月で絞り込み" />
               </SelectTrigger>
@@ -333,7 +360,7 @@ export function DeliveryList({
               </SelectContent>
             </Select>
 
-            <Select value={customerFilter} onValueChange={setCustomerFilter}>
+            <Select value={customerFilter} onValueChange={handleCustomerFilterChange}>
               <SelectTrigger className="h-12">
                 <SelectValue placeholder="お客様で絞り込み" />
               </SelectTrigger>
@@ -347,7 +374,7 @@ export function DeliveryList({
               </SelectContent>
             </Select>
 
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
               <SelectTrigger className="h-12">
                 <SelectValue placeholder="ステータスで絞り込み" />
               </SelectTrigger>
@@ -359,7 +386,7 @@ export function DeliveryList({
               </SelectContent>
             </Select>
 
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <Select value={typeFilter} onValueChange={handleTypeFilterChange}>
               <SelectTrigger className="h-12">
                 <SelectValue placeholder="種別で絞り込み" />
               </SelectTrigger>

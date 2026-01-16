@@ -87,6 +87,8 @@ interface DeliveryDataV2 {
     // H列: 消費税 (スプレッドシートで自動計算: =G*税率)
     notes?: string;            // I列: 備考
   }[];
+  // 合計金額（オプション - 設定されている場合のみスプレッドシートに書き込み）
+  total_amount?: number;       // 合計金額（税込）
 }
 
 interface InvoiceData {
@@ -126,23 +128,32 @@ interface InvoiceData {
   notes?: string;
 }
 
-// 新しい9列構造のテンプレート用（Phase 1で作成したテンプレート）
+// 新しい10列構造のテンプレート用（請求書テンプレート）
 interface InvoiceDataV2 {
   invoice_number: string;
   invoice_date: string;
   customer_name: string;
   customer_address?: string;
   items: {
-    date: string;              // A列: 日付 (MM/DD形式)
-    product_name: string;      // B列: 品名
-    unit_price: number;        // C列: 単価
-    quantity: number;          // D列: 数量
-    unit: string;              // E列: 単位 (kg, 袋, 箱など)
-    tax_rate: string;          // F列: 税率 ("8%" or "10%")
-    // G列: 税抜金額 (スプレッドシートで自動計算: =C*D)
-    // H列: 消費税 (スプレッドシートで自動計算: =G*税率)
-    notes?: string;            // I列: 備考
+    date: string;                    // A列: 日付 (MM/DD形式)
+    delivery_destination?: string;   // B列: 納品先
+    product_name: string;            // C列: 品名
+    unit_price: number;              // D列: 単価
+    quantity: number;                // E列: 数量
+    unit: string;                    // F列: 単位 (kg, 袋, 箱など)
+    tax_rate: string;                // G列: 税率 ("8%" or "10%")
+    // H列: 税抜金額 (スプレッドシートで自動計算: =D*E)
+    // I列: 消費税 (スプレッドシートで自動計算: =H*税率)
+    notes?: string;                  // J列: 備考
   }[];
+  // 税率別集計・合計（オプション - 設定されている場合のみスプレッドシートに書き込み）
+  subtotal_8?: number;               // C53: 8%対象
+  tax_8?: number;                    // C54: 消費税8%
+  subtotal_10?: number;              // C55: 10%対象
+  tax_10?: number;                   // C56: 消費税10%
+  subtotal?: number;                 // H58: 小計
+  total_tax?: number;                // H59: 消費税
+  total_amount?: number;             // H60: 合計, C7:D7: ご請求金額
 }
 
 class GoogleSheetsClient {
@@ -695,7 +706,7 @@ class GoogleSheetsClient {
       const row = itemsStartRow + index;
       updates.push(
         { range: `A${row}`, values: [[item.product_name]] },
-        { range: `B${row}`, values: [[item.quantity + (item.unit || '')]] }, // 数量 + 単位
+        { range: `B${row}`, values: [[formatQuantity(item.quantity) + (item.unit || '')]] }, // 数量 + 単位（整数なら小数点なし）
         { range: `C${row}`, values: [[item.unit_price]] },
         { range: `D${row}`, values: [[`${item.tax_rate}%`]] }, // 税率
         { range: `E${row}`, values: [[item.amount]] } // 税込金額
@@ -878,7 +889,7 @@ class GoogleSheetsClient {
         { range: `B${row}`, values: [[item.delivery_destination || '']] },
         { range: `C${row}`, values: [[item.description]] },
         { range: `D${row}`, values: [[item.unit_price]] },
-        { range: `E${row}`, values: [[item.quantity]] },
+        { range: `E${row}`, values: [[formatQuantity(item.quantity)]] },  // 数量（整数なら小数点なし）
         { range: `F${row}`, values: [[item.unit || '']] },
         { range: `G${row}`, values: [[`${item.tax_rate || 8}%`]] },
         { range: `H${row}`, values: [[item.subtotal || (item.unit_price * item.quantity)]] },
@@ -943,15 +954,16 @@ class GoogleSheetsClient {
   async shareSheet(sheetId: string, emails: string[] = []): Promise<void> {
     try {
       const drive = google.drive({ version: 'v3', auth: this.auth });
-      
-      // 共有リンクを有効化
+
+      // リンクを知っている全員が編集可能に設定
       await drive.permissions.create({
         fileId: sheetId,
         requestBody: {
-          role: 'reader',
+          role: 'writer',  // 編集権限
           type: 'anyone'
         }
       });
+      console.log('✅ Sheet shared: anyone with link can edit');
 
       // 指定されたメールアドレスに編集権限を付与
       for (const email of emails) {
@@ -1034,6 +1046,13 @@ class GoogleSheetsClient {
         // コピーしたファイルにデータを更新
         await this.updateDeliverySheetV2(newFileId, data);
         console.log('✅ Sheet data updated successfully');
+
+        // 共有設定を有効化（誰でも編集可能に）
+        try {
+          await this.shareSheet(newFileId);
+        } catch (shareError: any) {
+          console.warn('⚠️ Failed to enable sharing, but sheet was created:', shareError.message);
+        }
       } else {
         throw new GoogleSheetsError(
           '新しいテンプレート（V2）はOAuth 2.0認証が必要です',
@@ -1072,33 +1091,43 @@ class GoogleSheetsClient {
   /**
    * 新しい9列構造の納品書テンプレートにデータを投入
    * レイアウト: 左側=顧客情報、右側=発行元（ボニカ）
+   * 列構成: A:日付, B:品名, C:単価, D:数量, E:単位, F:税率, G:税抜金額(自動), H:消費税(自動), I:備考
    */
   private async updateDeliverySheetV2(spreadsheetId: string, data: DeliveryDataV2) {
     console.log('📊 Updating delivery sheet V2:', { spreadsheetId });
 
     const updates: Array<{ range: string; values: any[][] }> = [];
 
-    // 顧客情報（2-4行目、左側）
+    // 顧客情報（2-4行目、左側）- シート名プレフィックスなし（請求書と同じ方式）
     updates.push(
-      { range: '納品書テンプレート!A2', values: [[`${data.customer_name} 御中`]] },
-      { range: '納品書テンプレート!A3', values: [[data.customer_address || '']] },
-      { range: '納品書テンプレート!A4', values: [[`納品日: ${data.delivery_date}`]] },
-      { range: '納品書テンプレート!C4', values: [[`納品書番号: ${data.delivery_number}`]] }
+      { range: 'A2', values: [[`${data.customer_name} 御中`]] },
+      { range: 'A3', values: [[data.customer_address || '']] },
+      { range: 'A4', values: [[`納品日: ${data.delivery_date}`]] },
+      { range: 'C4', values: [[`納品書番号: ${data.delivery_number}`]] }
     );
 
+    // 合計金額を上部に表示（C7:D7）- 請求書と同様のレイアウト
+    if (data.total_amount !== undefined) {
+      updates.push(
+        { range: 'C7', values: [['ご納品金額']] },
+        { range: 'D7', values: [[`¥${data.total_amount.toLocaleString()}`]] }
+      );
+    }
+
     // 明細データ（11行目から開始、9列構造）
+    // A:日付, B:品名, C:単価, D:数量, E:単位, F:税率, G:税抜金額(自動), H:消費税(自動), I:備考
     const itemsStartRow = 11;
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
       updates.push(
-        { range: `納品書テンプレート!A${row}`, values: [[item.date]] },           // 日付
-        { range: `納品書テンプレート!B${row}`, values: [[item.product_name]] },   // 品名
-        { range: `納品書テンプレート!C${row}`, values: [[item.unit_price]] },     // 単価
-        { range: `納品書テンプレート!D${row}`, values: [[formatQuantity(item.quantity)]] },  // 数量（整数なら小数点なし）
-        { range: `納品書テンプレート!E${row}`, values: [[item.unit]] },           // 単位
-        { range: `納品書テンプレート!F${row}`, values: [[item.tax_rate]] },       // 税率
+        { range: `A${row}`, values: [[item.date]] },                          // A列: 日付
+        { range: `B${row}`, values: [[item.product_name]] },                  // B列: 品名
+        { range: `C${row}`, values: [[item.unit_price]] },                    // C列: 単価
+        { range: `D${row}`, values: [[formatQuantity(item.quantity)]] },      // D列: 数量（整数なら小数点なし）
+        { range: `E${row}`, values: [[item.unit]] },                          // E列: 単位
+        { range: `F${row}`, values: [[item.tax_rate]] },                      // F列: 税率
         // G列（税抜金額）とH列（消費税）はスプレッドシートの数式で自動計算
-        { range: `納品書テンプレート!I${row}`, values: [[item.notes || '']] }     // 備考
+        { range: `I${row}`, values: [[item.notes || '']] }                    // I列: 備考
       );
     });
 
@@ -1112,6 +1141,92 @@ class GoogleSheetsClient {
         data: updates
       }
     });
+
+    // 合計金額の書式設定（請求書と同様）
+    if (data.total_amount !== undefined) {
+      try {
+        // シートIDを取得
+        const spreadsheet = await this.sheets.spreadsheets.get({
+          spreadsheetId: spreadsheetId,
+        });
+        const firstSheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId || 0;
+
+        const formatRequests = [
+          // C7のフォーマット（ラベル）
+          {
+            repeatCell: {
+              range: {
+                sheetId: firstSheetId,
+                startRowIndex: 6,
+                endRowIndex: 7,
+                startColumnIndex: 2,  // C列
+                endColumnIndex: 3
+              },
+              cell: {
+                userEnteredFormat: {
+                  textFormat: {
+                    fontSize: 14,
+                    bold: true
+                  },
+                  horizontalAlignment: 'LEFT',
+                  verticalAlignment: 'MIDDLE'
+                }
+              },
+              fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+            }
+          },
+          // D7のフォーマット（金額）
+          {
+            repeatCell: {
+              range: {
+                sheetId: firstSheetId,
+                startRowIndex: 6,
+                endRowIndex: 7,
+                startColumnIndex: 3,  // D列
+                endColumnIndex: 4
+              },
+              cell: {
+                userEnteredFormat: {
+                  textFormat: {
+                    fontSize: 16,
+                    bold: true
+                  },
+                  horizontalAlignment: 'LEFT',
+                  verticalAlignment: 'MIDDLE'
+                }
+              },
+              fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+            }
+          },
+          // C7:D7に枠線を追加
+          {
+            updateBorders: {
+              range: {
+                sheetId: firstSheetId,
+                startRowIndex: 6,
+                endRowIndex: 7,
+                startColumnIndex: 2,  // C列
+                endColumnIndex: 4     // D列まで
+              },
+              top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+              bottom: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+              left: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+              right: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
+            }
+          }
+        ];
+
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: spreadsheetId,
+          requestBody: {
+            requests: formatRequests
+          }
+        });
+        console.log('✅ Formatting applied successfully');
+      } catch (formatError: any) {
+        console.warn('⚠️ Formatting failed (non-critical):', formatError.message);
+      }
+    }
 
     console.log('✅ Delivery sheet V2 updated successfully');
   }
@@ -1152,6 +1267,13 @@ class GoogleSheetsClient {
         // コピーしたファイルにデータを更新
         await this.updateInvoiceSheetV2(newFileId, data);
         console.log('✅ Invoice sheet V2 data updated successfully');
+
+        // 共有設定を有効化（誰でも編集可能に）
+        try {
+          await this.shareSheet(newFileId);
+        } catch (shareError: any) {
+          console.warn('⚠️ Failed to enable sharing, but sheet was created:', shareError.message);
+        }
       } else {
         throw new GoogleSheetsError(
           '新しいテンプレート（V2）はOAuth 2.0認証が必要です',
@@ -1187,36 +1309,537 @@ class GoogleSheetsClient {
     }
   }
 
+  // ========================================
+  // 月別スプレッドシート管理メソッド
+  // ========================================
+
   /**
-   * 新しい9列構造の請求書テンプレートにデータを投入
-   * レイアウト: 左側=顧客情報、右側=発行元（ボニカ）
+   * 月別請求書スプレッドシートを取得または作成し、請求書タブを追加
+   * @param data 請求書データ
+   * @param templateFileId テンプレートファイルID
+   * @param year 対象年
+   * @param month 対象月
+   * @param customerName 顧客名（タブ名に使用）
+   * @returns { spreadsheetId, spreadsheetUrl, sheetId, tabName }
    */
-  private async updateInvoiceSheetV2(spreadsheetId: string, data: InvoiceDataV2) {
-    console.log('📊 Updating invoice sheet V2:', { spreadsheetId });
+  async createOrAddInvoiceToMonthlySheet(
+    data: InvoiceDataV2,
+    templateFileId: string,
+    year: number,
+    month: number,
+    customerName: string,
+    existingSpreadsheetId?: string
+  ): Promise<{
+    spreadsheetId: string;
+    spreadsheetUrl: string;
+    sheetId: number;
+    tabName: string;
+    isNewSpreadsheet: boolean;
+  }> {
+    console.log('📊 createOrAddInvoiceToMonthlySheet called:', {
+      year, month, customerName, existingSpreadsheetId
+    });
+
+    const tabName = `${month}月分_${customerName}`;
+    let spreadsheetId: string;
+    let isNewSpreadsheet = false;
+
+    if (existingSpreadsheetId) {
+      // 既存のスプレッドシートにタブを追加
+      spreadsheetId = existingSpreadsheetId;
+      console.log('📋 Adding tab to existing spreadsheet:', spreadsheetId);
+    } else {
+      // 新しいスプレッドシートを作成
+      const spreadsheetName = `${year}年${month}月_請求書一覧`;
+      spreadsheetId = await this.createMonthlySpreadsheet(spreadsheetName, templateFileId);
+      isNewSpreadsheet = true;
+      console.log('✅ New monthly spreadsheet created:', spreadsheetId);
+    }
+
+    // テンプレートからタブをコピー
+    const newSheetId = await this.copySheetFromTemplate(templateFileId, spreadsheetId, tabName);
+    console.log('✅ Sheet copied with new tab name:', tabName);
+
+    // コピーしたタブにデータを投入
+    await this.updateInvoiceSheetV2WithTabName(spreadsheetId, data, tabName);
+    console.log('✅ Invoice data updated on tab:', tabName);
+
+    // 共有設定を有効化（新規作成の場合のみ）
+    if (isNewSpreadsheet) {
+      try {
+        await this.shareSheet(spreadsheetId);
+        console.log('✅ Sheet sharing enabled');
+      } catch (shareError: any) {
+        console.warn('⚠️ Failed to enable sharing:', shareError.message);
+      }
+    }
+
+    const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+
+    return {
+      spreadsheetId,
+      spreadsheetUrl,
+      sheetId: newSheetId,
+      tabName,
+      isNewSpreadsheet
+    };
+  }
+
+  /**
+   * 新しい月別スプレッドシートを作成（テンプレートをコピー）
+   */
+  private async createMonthlySpreadsheet(name: string, templateFileId: string): Promise<string> {
+    console.log('📋 Creating monthly spreadsheet:', name);
+
+    const drive = google.drive({ version: 'v3', auth: this.auth });
+
+    const copiedFile = await drive.files.copy({
+      fileId: templateFileId,
+      requestBody: {
+        name: name,
+      },
+    });
+
+    const spreadsheetId = copiedFile.data.id!;
+    console.log('✅ Monthly spreadsheet created:', spreadsheetId);
+
+    // デフォルトのシート名を一時的な名前に変更（後で上書きされる）
+    try {
+      const spreadsheet = await this.sheets.spreadsheets.get({
+        spreadsheetId: spreadsheetId,
+      });
+
+      const firstSheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId;
+      if (firstSheetId !== undefined) {
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: spreadsheetId,
+          requestBody: {
+            requests: [
+              {
+                updateSheetProperties: {
+                  properties: {
+                    sheetId: firstSheetId,
+                    title: '_テンプレート',
+                  },
+                  fields: 'title',
+                },
+              },
+            ],
+          },
+        });
+      }
+    } catch (renameError: any) {
+      console.warn('⚠️ Could not rename default sheet:', renameError.message);
+    }
+
+    return spreadsheetId;
+  }
+
+  /**
+   * テンプレートからシートをコピーして別のスプレッドシートに追加
+   */
+  private async copySheetFromTemplate(
+    templateSpreadsheetId: string,
+    destinationSpreadsheetId: string,
+    newTabName: string
+  ): Promise<number> {
+    console.log('📋 Copying sheet from template:', {
+      templateSpreadsheetId,
+      destinationSpreadsheetId,
+      newTabName
+    });
+
+    // テンプレートの最初のシートIDを取得
+    const templateSpreadsheet = await this.sheets.spreadsheets.get({
+      spreadsheetId: templateSpreadsheetId,
+    });
+
+    const sourceSheetId = templateSpreadsheet.data.sheets?.[0]?.properties?.sheetId;
+    if (sourceSheetId === undefined) {
+      throw new GoogleSheetsError(
+        'テンプレートにシートが見つかりません',
+        undefined,
+        GoogleSheetsErrorCode.TEMPLATE_NOT_FOUND
+      );
+    }
+
+    // シートをコピー
+    const copyResponse = await this.sheets.spreadsheets.sheets.copyTo({
+      spreadsheetId: templateSpreadsheetId,
+      sheetId: sourceSheetId,
+      requestBody: {
+        destinationSpreadsheetId: destinationSpreadsheetId,
+      },
+    });
+
+    const newSheetId = copyResponse.data.sheetId!;
+    console.log('✅ Sheet copied, new sheetId:', newSheetId);
+
+    // シート名を変更
+    await this.sheets.spreadsheets.batchUpdate({
+      spreadsheetId: destinationSpreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: {
+                sheetId: newSheetId,
+                title: newTabName,
+              },
+              fields: 'title',
+            },
+          },
+        ],
+      },
+    });
+
+    console.log('✅ Sheet renamed to:', newTabName);
+    return newSheetId;
+  }
+
+  /**
+   * タブ名を指定して請求書データを投入（月別スプレッドシート用）
+   */
+  private async updateInvoiceSheetV2WithTabName(
+    spreadsheetId: string,
+    data: InvoiceDataV2,
+    tabName: string
+  ) {
+    console.log('📊 Updating invoice sheet V2 with tab name:', { spreadsheetId, tabName });
+
+    // シートIDを取得
+    const sheetId = await this.getSheetIdByName(spreadsheetId, tabName);
+
+    // プレースホルダーを置換
+    try {
+      const findReplaceRequests = [
+        {
+          findReplace: {
+            find: '{{deliveryDate}}',
+            replacement: data.invoice_date,
+            allSheets: false,
+            sheetId: sheetId,
+            matchCase: false,
+            matchEntireCell: false,
+          }
+        },
+        {
+          findReplace: {
+            find: '{{deliveryNumber}}',
+            replacement: data.invoice_number,
+            allSheets: false,
+            sheetId: sheetId,
+            matchCase: false,
+            matchEntireCell: false,
+          }
+        },
+        {
+          findReplace: {
+            find: '{{customerName}}',
+            replacement: `${data.customer_name} 御中`,
+            allSheets: false,
+            sheetId: sheetId,
+            matchCase: false,
+            matchEntireCell: false,
+          }
+        },
+        {
+          findReplace: {
+            find: '{{customerAddress}}',
+            replacement: data.customer_address || '',
+            allSheets: false,
+            sheetId: sheetId,
+            matchCase: false,
+            matchEntireCell: false,
+          }
+        }
+      ];
+
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId,
+        requestBody: {
+          requests: findReplaceRequests
+        }
+      });
+      console.log('✅ Placeholders replaced successfully');
+    } catch (placeholderError: any) {
+      console.error('⚠️ Placeholder replacement failed (non-critical):', placeholderError.message);
+    }
 
     const updates: Array<{ range: string; values: any[][] }> = [];
 
     // 顧客情報（2-4行目、左側）
     updates.push(
-      { range: '請求書テンプレート!A2', values: [[`${data.customer_name} 御中`]] },
-      { range: '請求書テンプレート!A3', values: [[data.customer_address || '']] },
-      { range: '請求書テンプレート!A4', values: [[`請求日: ${data.invoice_date}`]] },
-      { range: '請求書テンプレート!C4', values: [[`請求番号: ${data.invoice_number}`]] }
+      { range: `'${tabName}'!A2`, values: [[`${data.customer_name} 御中`]] },
+      { range: `'${tabName}'!A3`, values: [[data.customer_address || '']] },
+      { range: `'${tabName}'!A4`, values: [[`請求日: ${data.invoice_date}`]] },
+      { range: `'${tabName}'!D4`, values: [[`請求書番号: ${data.invoice_number}`]] }
     );
 
-    // 明細データ（11行目から開始、9列構造）
+    // ご請求金額欄（C7:D7）- 合計金額が設定されている場合
+    if (data.total_amount !== undefined) {
+      updates.push(
+        { range: `'${tabName}'!C7`, values: [['ご請求金額']] },
+        { range: `'${tabName}'!D7`, values: [[`¥${data.total_amount.toLocaleString()}`]] }
+      );
+    }
+
+    // 明細データ（11行目から開始、10列構造）
     const itemsStartRow = 11;
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
       updates.push(
-        { range: `請求書テンプレート!A${row}`, values: [[item.date]] },           // 日付
-        { range: `請求書テンプレート!B${row}`, values: [[item.product_name]] },   // 品名
-        { range: `請求書テンプレート!C${row}`, values: [[item.unit_price]] },     // 単価
-        { range: `請求書テンプレート!D${row}`, values: [[formatQuantity(item.quantity)]] },  // 数量（整数なら小数点なし）
-        { range: `請求書テンプレート!E${row}`, values: [[item.unit]] },           // 単位
-        { range: `請求書テンプレート!F${row}`, values: [[item.tax_rate]] },       // 税率
-        // G列（税抜金額）とH列（消費税）はスプレッドシートの数式で自動計算
-        { range: `請求書テンプレート!I${row}`, values: [[item.notes || '']] }     // 備考
+        { range: `'${tabName}'!A${row}`, values: [[item.date]] },
+        { range: `'${tabName}'!B${row}`, values: [[item.delivery_destination || '']] },
+        { range: `'${tabName}'!C${row}`, values: [[item.product_name]] },
+        { range: `'${tabName}'!D${row}`, values: [[item.unit_price]] },
+        { range: `'${tabName}'!E${row}`, values: [[formatQuantity(item.quantity)]] },
+        { range: `'${tabName}'!F${row}`, values: [[item.unit]] },
+        { range: `'${tabName}'!G${row}`, values: [[item.tax_rate]] },
+        { range: `'${tabName}'!J${row}`, values: [[item.notes || '']] }
+      );
+    });
+
+    // 税率別集計（C53-C56）- 設定されている場合
+    if (data.subtotal_8 !== undefined) {
+      updates.push(
+        { range: `'${tabName}'!C53`, values: [[`¥${data.subtotal_8.toLocaleString()}`]] },
+        { range: `'${tabName}'!C54`, values: [[`¥${data.tax_8?.toLocaleString() || '0'}`]] },
+        { range: `'${tabName}'!C55`, values: [[`¥${data.subtotal_10?.toLocaleString() || '0'}`]] },
+        { range: `'${tabName}'!C56`, values: [[`¥${data.tax_10?.toLocaleString() || '0'}`]] }
+      );
+    }
+
+    // 小計・消費税・合計（H58-H60）- 設定されている場合
+    if (data.subtotal !== undefined) {
+      updates.push(
+        { range: `'${tabName}'!H58`, values: [[`¥${data.subtotal.toLocaleString()}`]] },
+        { range: `'${tabName}'!H59`, values: [[`¥${data.total_tax?.toLocaleString() || '0'}`]] },
+        { range: `'${tabName}'!H60`, values: [[`¥${data.total_amount?.toLocaleString() || '0'}`]] }
+      );
+    }
+
+    console.log('📊 Batch update ranges:', updates.length, 'ranges');
+
+    // 一括更新
+    await this.sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: spreadsheetId,
+      requestBody: {
+        valueInputOption: 'USER_ENTERED',
+        data: updates
+      }
+    });
+
+    // 書式設定（合計金額が設定されている場合のみ）
+    if (data.total_amount !== undefined) {
+      const formatRequests = [
+        // C7のフォーマット（ラベル）
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 6,
+              endRowIndex: 7,
+              startColumnIndex: 2,  // C列
+              endColumnIndex: 3
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: {
+                  fontSize: 14,
+                  bold: true
+                },
+                horizontalAlignment: 'LEFT',
+                verticalAlignment: 'MIDDLE'
+              }
+            },
+            fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+          }
+        },
+        // D7のフォーマット（金額）
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 6,
+              endRowIndex: 7,
+              startColumnIndex: 3,  // D列
+              endColumnIndex: 4
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: {
+                  fontSize: 16,
+                  bold: true
+                },
+                horizontalAlignment: 'LEFT',
+                verticalAlignment: 'MIDDLE'
+              }
+            },
+            fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+          }
+        },
+        // C7:D7に枠線を追加
+        {
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 6,
+              endRowIndex: 7,
+              startColumnIndex: 2,  // C列
+              endColumnIndex: 4     // D列まで
+            },
+            top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
+        // E列（数量）のフォーマットを整数に設定（明細行）
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,  // 11行目から
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 4,  // E列
+              endColumnIndex: 5
+            },
+            cell: {
+              userEnteredFormat: {
+                numberFormat: {
+                  type: 'NUMBER',
+                  pattern: '0'
+                }
+              }
+            },
+            fields: 'userEnteredFormat.numberFormat'
+          }
+        }
+      ];
+
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId,
+        requestBody: {
+          requests: formatRequests
+        }
+      });
+      console.log('✅ Formatting applied successfully');
+    }
+
+    console.log('✅ Invoice sheet V2 with tab name updated successfully');
+  }
+
+  /**
+   * シート名からシートIDを取得
+   */
+  private async getSheetIdByName(spreadsheetId: string, sheetName: string): Promise<number> {
+    const spreadsheet = await this.sheets.spreadsheets.get({
+      spreadsheetId: spreadsheetId,
+    });
+
+    const sheet = spreadsheet.data.sheets?.find(
+      (s: any) => s.properties?.title === sheetName
+    );
+
+    if (!sheet?.properties?.sheetId) {
+      throw new GoogleSheetsError(
+        `シート「${sheetName}」が見つかりません`,
+        undefined,
+        GoogleSheetsErrorCode.TEMPLATE_NOT_FOUND
+      );
+    }
+
+    return sheet.properties.sheetId;
+  }
+
+  /**
+   * 新しい10列構造の請求書テンプレートにデータを投入
+   * レイアウト: 左側=顧客情報、右側=発行元（ボニカ）
+   * 列構成: A:日付, B:納品先, C:品名, D:単価, E:数量, F:単位, G:税率, H:税抜金額, I:消費税, J:備考
+   */
+  private async updateInvoiceSheetV2(spreadsheetId: string, data: InvoiceDataV2) {
+    console.log('📊 Updating invoice sheet V2:', { spreadsheetId });
+
+    // まずプレースホルダーを置換
+    try {
+      const findReplaceRequests = [
+        {
+          findReplace: {
+            find: '{{deliveryDate}}',
+            replacement: data.invoice_date,
+            allSheets: true,
+            matchCase: false,
+            matchEntireCell: false,
+          }
+        },
+        {
+          findReplace: {
+            find: '{{deliveryNumber}}',
+            replacement: data.invoice_number,
+            allSheets: true,
+            matchCase: false,
+            matchEntireCell: false,
+          }
+        },
+        {
+          findReplace: {
+            find: '{{customerName}}',
+            replacement: `${data.customer_name} 御中`,
+            allSheets: true,
+            matchCase: false,
+            matchEntireCell: false,
+          }
+        },
+        {
+          findReplace: {
+            find: '{{customerAddress}}',
+            replacement: data.customer_address || '',
+            allSheets: true,
+            matchCase: false,
+            matchEntireCell: false,
+          }
+        }
+      ];
+
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId,
+        requestBody: {
+          requests: findReplaceRequests
+        }
+      });
+      console.log('✅ Placeholders replaced successfully');
+    } catch (placeholderError: any) {
+      console.error('⚠️ Placeholder replacement failed (non-critical):', placeholderError.message);
+      // プレースホルダー置換が失敗しても続行
+    }
+
+    const updates: Array<{ range: string; values: any[][] }> = [];
+
+    // 顧客情報（2-4行目、左側）- プレースホルダー置換のフォールバック
+    // シート名プレフィックスを使用しない（コピー後のシート名が異なる場合に対応）
+    updates.push(
+      { range: 'A2', values: [[`${data.customer_name} 御中`]] },
+      { range: 'A3', values: [[data.customer_address || '']] },
+      { range: 'A4', values: [[`請求日: ${data.invoice_date}`]] },
+      { range: 'D4', values: [[`請求書番号: ${data.invoice_number}`]] }
+    );
+
+    // 明細データ（11行目から開始、10列構造）
+    // A:日付, B:納品先, C:品名, D:単価, E:数量, F:単位, G:税率, H:税抜金額(自動), I:消費税(自動), J:備考
+    const itemsStartRow = 11;
+    data.items.forEach((item, index) => {
+      const row = itemsStartRow + index;
+      updates.push(
+        { range: `A${row}`, values: [[item.date]] },                          // 日付
+        { range: `B${row}`, values: [[item.delivery_destination || '']] },    // 納品先
+        { range: `C${row}`, values: [[item.product_name]] },                  // 品名
+        { range: `D${row}`, values: [[item.unit_price]] },                    // 単価
+        { range: `E${row}`, values: [[formatQuantity(item.quantity)]] },      // 数量（整数なら小数点なし）
+        { range: `F${row}`, values: [[item.unit]] },                          // 単位
+        { range: `G${row}`, values: [[item.tax_rate]] },                      // 税率
+        // H列（税抜金額）とI列（消費税）はスプレッドシートの数式で自動計算
+        { range: `J${row}`, values: [[item.notes || '']] }                    // 備考
       );
     });
 

@@ -8,24 +8,32 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Truck, Download, Loader2, Eye } from "lucide-react"
+import { Truck, Download, Loader2, Eye, FileDown } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { apiClient, type Delivery, type Customer } from "@/lib/api"
+import { apiClient, type Delivery, type Customer, type Category } from "@/lib/api"
 
 export default function DeliveriesListPage() {
   const { isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
-  
+
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  
+
   // Filters
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCustomer, setSelectedCustomer] = useState("all")
   const [selectedStatus, setSelectedStatus] = useState("all")
-  
+
+  // CSV Export filters
+  const [exportStartDate, setExportStartDate] = useState("")
+  const [exportEndDate, setExportEndDate] = useState("")
+  const [exportCustomer, setExportCustomer] = useState("all")
+  const [exportCategory, setExportCategory] = useState("all")
+  const [exporting, setExporting] = useState(false)
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -41,6 +49,7 @@ export default function DeliveriesListPage() {
   useEffect(() => {
     if (isAuthenticated) {
       loadCustomers()
+      loadCategories()
       loadDeliveries()
     }
   }, [isAuthenticated])
@@ -57,6 +66,15 @@ export default function DeliveriesListPage() {
       if (response.data) setCustomers(response.data)
     } catch (error) {
       console.error('顧客データ取得エラー:', error)
+    }
+  }
+
+  const loadCategories = async () => {
+    try {
+      const response = await apiClient.getCategories()
+      if (response.data) setCategories(response.data)
+    } catch (error) {
+      console.error('カテゴリーデータ取得エラー:', error)
     }
   }
 
@@ -92,7 +110,7 @@ export default function DeliveriesListPage() {
       const blob = await apiClient.downloadCsv({
         type: 'deliveries'
       })
-      
+
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.style.display = 'none'
@@ -104,6 +122,49 @@ export default function DeliveriesListPage() {
     } catch (error) {
       console.error('CSV出力エラー:', error)
       setError('CSV出力に失敗しました')
+    }
+  }
+
+  const exportDeliveriesCsv = async () => {
+    if (!exportStartDate || !exportEndDate) {
+      setError('期間（開始日・終了日）を指定してください')
+      return
+    }
+
+    setExporting(true)
+    setError('')
+
+    try {
+      const result = await apiClient.exportDeliveriesCsv({
+        startDate: exportStartDate,
+        endDate: exportEndDate,
+        customerId: exportCustomer === 'all' ? undefined : exportCustomer,
+        categoryId: exportCategory === 'all' ? undefined : exportCategory,
+      })
+
+      if (result.error) {
+        setError(result.error)
+        return
+      }
+
+      if (result.blob) {
+        const url = window.URL.createObjectURL(result.blob)
+        const a = document.createElement('a')
+        a.style.display = 'none'
+        a.href = url
+        const startStr = exportStartDate.replace(/-/g, '')
+        const endStr = exportEndDate.replace(/-/g, '')
+        a.download = `納品履歴_${startStr}_${endStr}.csv`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      }
+    } catch (error) {
+      console.error('CSV出力エラー:', error)
+      setError('CSV出力に失敗しました')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -126,6 +187,22 @@ export default function DeliveriesListPage() {
 
   const formatCurrency = (amount: number) => {
     return `¥${amount.toLocaleString()}`
+  }
+
+  // フィルター変更ハンドラー（ページを1にリセット）
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    setCurrentPage(1)
+  }
+
+  const handleCustomerChange = (value: string) => {
+    setSelectedCustomer(value)
+    setCurrentPage(1)
+  }
+
+  const handleStatusChange = (value: string) => {
+    setSelectedStatus(value)
+    setCurrentPage(1)
   }
 
   const resetFilters = () => {
@@ -183,12 +260,12 @@ export default function DeliveriesListPage() {
                 <Input
                   placeholder="顧客名で検索..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                 />
               </div>
               <div>
                 <label className="text-sm font-medium mb-2 block">顧客</label>
-                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                <Select value={selectedCustomer} onValueChange={handleCustomerChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="すべて" />
                   </SelectTrigger>
@@ -204,7 +281,7 @@ export default function DeliveriesListPage() {
               </div>
               <div>
                 <label className="text-sm font-medium mb-2 block">ステータス</label>
-                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                <Select value={selectedStatus} onValueChange={handleStatusChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="すべて" />
                   </SelectTrigger>
@@ -222,6 +299,90 @@ export default function DeliveriesListPage() {
                 </Button>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* CSVエクスポート */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileDown className="h-5 w-5" />
+              納品履歴CSVエクスポート
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">開始日 *</label>
+                <Input
+                  type="date"
+                  value={exportStartDate}
+                  onChange={(e) => setExportStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">終了日 *</label>
+                <Input
+                  type="date"
+                  value={exportEndDate}
+                  onChange={(e) => setExportEndDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">納品先</label>
+                <Select value={exportCustomer} onValueChange={setExportCustomer}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="すべて" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    {customers.map((customer) => (
+                      <SelectItem key={customer.id} value={customer.id}>
+                        {customer.companyName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">カテゴリー</label>
+                <Select value={exportCategory} onValueChange={setExportCategory}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="すべて" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <Button
+                  onClick={exportDeliveriesCsv}
+                  disabled={exporting || !exportStartDate || !exportEndDate}
+                  className="w-full gap-2"
+                >
+                  {exporting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      エクスポート中...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      CSVダウンロード
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              * 期間指定は必須です。最大10,000件まで出力可能です。
+            </p>
           </CardContent>
         </Card>
 

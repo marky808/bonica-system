@@ -27,6 +27,7 @@ export default function PurchasesListPage() {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [selectedSupplier, setSelectedSupplier] = useState("all")
   const [selectedStatus, setSelectedStatus] = useState("all")
+  const [selectedMonth, setSelectedMonth] = useState("")
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
@@ -51,7 +52,7 @@ export default function PurchasesListPage() {
     if (isAuthenticated) {
       loadPurchases()
     }
-  }, [currentPage, searchTerm, selectedCategory, selectedSupplier, selectedStatus])
+  }, [currentPage, searchTerm, selectedCategory, selectedSupplier, selectedStatus, selectedMonth])
 
   const loadInitialData = async () => {
     try {
@@ -80,6 +81,7 @@ export default function PurchasesListPage() {
         category: selectedCategory === "all" ? undefined : selectedCategory || undefined,
         supplier: selectedSupplier === "all" ? undefined : selectedSupplier || undefined,
         status: selectedStatus === "all" ? undefined : selectedStatus || undefined,
+        month: selectedMonth || undefined,
       })
       
       if (response.error) {
@@ -135,11 +137,38 @@ export default function PurchasesListPage() {
     return `¥${amount.toLocaleString()}`
   }
 
+  // フィルター変更ハンドラー（ページを1にリセット）
+  const handleMonthChange = (value: string) => {
+    setSelectedMonth(value)
+    setCurrentPage(1)
+  }
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    setCurrentPage(1)
+  }
+
+  const handleCategoryChange = (value: string) => {
+    setSelectedCategory(value)
+    setCurrentPage(1)
+  }
+
+  const handleSupplierChange = (value: string) => {
+    setSelectedSupplier(value)
+    setCurrentPage(1)
+  }
+
+  const handleStatusChange = (value: string) => {
+    setSelectedStatus(value)
+    setCurrentPage(1)
+  }
+
   const resetFilters = () => {
     setSearchTerm("")
     setSelectedCategory("all")
     setSelectedSupplier("all")
     setSelectedStatus("all")
+    setSelectedMonth("")
     setCurrentPage(1)
   }
 
@@ -185,18 +214,27 @@ export default function PurchasesListPage() {
             <CardTitle>検索・フィルター</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">月</label>
+                <Input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => handleMonthChange(e.target.value)}
+                  className="w-full"
+                />
+              </div>
               <div>
                 <label className="text-sm font-medium mb-2 block">商品名検索</label>
                 <Input
                   placeholder="商品名で検索..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                 />
               </div>
               <div>
                 <label className="text-sm font-medium mb-2 block">カテゴリ</label>
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <Select value={selectedCategory} onValueChange={handleCategoryChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="すべて" />
                   </SelectTrigger>
@@ -212,7 +250,7 @@ export default function PurchasesListPage() {
               </div>
               <div>
                 <label className="text-sm font-medium mb-2 block">仕入先</label>
-                <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
+                <Select value={selectedSupplier} onValueChange={handleSupplierChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="すべて" />
                   </SelectTrigger>
@@ -228,7 +266,7 @@ export default function PurchasesListPage() {
               </div>
               <div>
                 <label className="text-sm font-medium mb-2 block">ステータス</label>
-                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                <Select value={selectedStatus} onValueChange={handleStatusChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="すべて" />
                   </SelectTrigger>
