@@ -1115,10 +1115,23 @@ class GoogleSheetsClient {
     }
 
     // 明細データ（11行目から開始、9列構造）
-    // A:日付, B:品名, C:単価, D:数量, E:単位, F:税率, G:税抜金額(自動), H:消費税(自動), I:備考
+    // A:日付, B:品名, C:単価, D:数量, E:単位, F:税率, G:税抜金額, H:消費税, I:備考
     const itemsStartRow = 11;
+    let totalSubtotal = 0;
+    let totalTax = 0;
+
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
+      // 税抜金額と消費税を計算
+      const subtotal = item.unit_price * item.quantity;
+      // 税率を文字列から数値に変換（"8%" -> 0.08, "10%" -> 0.10）
+      const taxRateNum = parseInt(item.tax_rate.replace('%', ''), 10) / 100;
+      const taxAmount = Math.floor(subtotal * taxRateNum);
+
+      // 合計用に累積
+      totalSubtotal += subtotal;
+      totalTax += taxAmount;
+
       updates.push(
         { range: `A${row}`, values: [[item.date]] },                          // A列: 日付
         { range: `B${row}`, values: [[item.product_name]] },                  // B列: 品名
@@ -1126,10 +1139,22 @@ class GoogleSheetsClient {
         { range: `D${row}`, values: [[formatQuantity(item.quantity)]] },      // D列: 数量（整数なら小数点なし）
         { range: `E${row}`, values: [[item.unit]] },                          // E列: 単位
         { range: `F${row}`, values: [[item.tax_rate]] },                      // F列: 税率
-        // G列（税抜金額）とH列（消費税）はスプレッドシートの数式で自動計算
+        { range: `G${row}`, values: [[subtotal]] },                           // G列: 税抜金額
+        { range: `H${row}`, values: [[taxAmount]] },                          // H列: 消費税
         { range: `I${row}`, values: [[item.notes || '']] }                    // I列: 備考
       );
     });
+
+    // 明細下部に合計行を追加（明細終了行 + 2行）
+    const summaryRow = itemsStartRow + data.items.length + 1;
+    const grandTotal = totalSubtotal + totalTax;
+    updates.push(
+      { range: `F${summaryRow}`, values: [['合計']] },
+      { range: `G${summaryRow}`, values: [[totalSubtotal]] },
+      { range: `H${summaryRow}`, values: [[totalTax]] },
+      { range: `I${summaryRow}`, values: [[`¥${grandTotal.toLocaleString()}`]] }
+    );
+    console.log(`📊 Delivery summary row at ${summaryRow}: subtotal=${totalSubtotal}, tax=${totalTax}, total=${grandTotal}`);
 
     console.log('📊 Batch update ranges V2:', updates.map(u => u.range));
 
@@ -1183,100 +1208,334 @@ class GoogleSheetsClient {
       }
     });
 
-    // 合計金額の書式設定（A7:B7、各セルに黒枠）
-    if (data.total_amount !== undefined) {
-      try {
-        const formatRequests = [
-          // A7のフォーマット（ラベル「合計金額」）
-          {
-            repeatCell: {
-              range: {
-                sheetId: firstSheetId,
-                startRowIndex: 6,
-                endRowIndex: 7,
-                startColumnIndex: 0,  // A列
-                endColumnIndex: 1
-              },
-              cell: {
-                userEnteredFormat: {
-                  textFormat: {
-                    fontSize: 14,
-                    bold: true
-                  },
-                  horizontalAlignment: 'CENTER',
-                  verticalAlignment: 'MIDDLE'
-                }
-              },
-              fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
-            }
-          },
-          // B7のフォーマット（金額）
-          {
-            repeatCell: {
-              range: {
-                sheetId: firstSheetId,
-                startRowIndex: 6,
-                endRowIndex: 7,
-                startColumnIndex: 1,  // B列
-                endColumnIndex: 2
-              },
-              cell: {
-                userEnteredFormat: {
-                  textFormat: {
-                    fontSize: 16,
-                    bold: true
-                  },
-                  horizontalAlignment: 'CENTER',
-                  verticalAlignment: 'MIDDLE'
-                }
-              },
-              fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
-            }
-          },
-          // A7に黒枠を追加
-          {
-            updateBorders: {
-              range: {
-                sheetId: firstSheetId,
-                startRowIndex: 6,
-                endRowIndex: 7,
-                startColumnIndex: 0,  // A列
-                endColumnIndex: 1
-              },
-              top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-              bottom: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-              left: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-              right: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
-            }
-          },
-          // B7に黒枠を追加
-          {
-            updateBorders: {
-              range: {
-                sheetId: firstSheetId,
-                startRowIndex: 6,
-                endRowIndex: 7,
-                startColumnIndex: 1,  // B列
-                endColumnIndex: 2
-              },
-              top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-              bottom: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-              left: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-              right: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
-            }
+    // 合計金額の書式設定（A7:B7、各セルに黒枠 + 明細下部の合計行）
+    try {
+      const formatRequests = [
+        // A7のフォーマット（ラベル「合計金額」）
+        {
+          repeatCell: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: 6,
+              endRowIndex: 7,
+              startColumnIndex: 0,  // A列
+              endColumnIndex: 1
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: {
+                  fontSize: 14,
+                  bold: true
+                },
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE'
+              }
+            },
+            fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
           }
-        ];
+        },
+        // B7のフォーマット（金額）
+        {
+          repeatCell: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: 6,
+              endRowIndex: 7,
+              startColumnIndex: 1,  // B列
+              endColumnIndex: 2
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: {
+                  fontSize: 16,
+                  bold: true
+                },
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE'
+              }
+            },
+            fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+          }
+        },
+        // A7に黒枠を追加
+        {
+          updateBorders: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: 6,
+              endRowIndex: 7,
+              startColumnIndex: 0,  // A列
+              endColumnIndex: 1
+            },
+            top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
+        // B7に黒枠を追加
+        {
+          updateBorders: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: 6,
+              endRowIndex: 7,
+              startColumnIndex: 1,  // B列
+              endColumnIndex: 2
+            },
+            top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
+        // 明細下部の合計行（F-I列）のフォーマット
+        {
+          repeatCell: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: summaryRow - 1,  // 0-indexed
+              endRowIndex: summaryRow,
+              startColumnIndex: 5,  // F列
+              endColumnIndex: 9     // I列まで
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: {
+                  bold: true
+                },
+                backgroundColor: { red: 0.95, green: 0.95, blue: 0.95 }
+              }
+            },
+            fields: 'userEnteredFormat(textFormat,backgroundColor)'
+          }
+        },
+        // 明細下部の合計行に上枠線を追加
+        {
+          updateBorders: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: summaryRow - 1,
+              endRowIndex: summaryRow,
+              startColumnIndex: 5,  // F列
+              endColumnIndex: 9     // I列
+            },
+            top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
+        // ========================================
+        // 明細行（11行目〜）に枠線を適用
+        // テンプレートの枠線範囲外の明細行にも枠線を付ける
+        // ========================================
+        {
+          updateBorders: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: itemsStartRow - 1,  // 11行目（0-indexed で 10）
+              endRowIndex: itemsStartRow - 1 + data.items.length,  // 明細最終行まで
+              startColumnIndex: 0,  // A列
+              endColumnIndex: 9     // I列まで
+            },
+            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerHorizontal: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerVertical: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
+        // ========================================
+        // 明細行のアラインメントと数値フォーマットを設定
+        // ========================================
+        // A列（日付）: 中央寄せ
+        {
+          repeatCell: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 0,  // A列
+              endColumnIndex: 1
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'CENTER'
+              }
+            },
+            fields: 'userEnteredFormat.horizontalAlignment'
+          }
+        },
+        // B列（品名）: 左寄せ
+        {
+          repeatCell: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 1,  // B列
+              endColumnIndex: 2
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'LEFT'
+              }
+            },
+            fields: 'userEnteredFormat.horizontalAlignment'
+          }
+        },
+        // C列（単価）: 右寄せ + 通貨フォーマット
+        {
+          repeatCell: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 2,  // C列
+              endColumnIndex: 3
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'RIGHT',
+                numberFormat: {
+                  type: 'CURRENCY',
+                  pattern: '¥#,##0'
+                }
+              }
+            },
+            fields: 'userEnteredFormat(horizontalAlignment,numberFormat)'
+          }
+        },
+        // D列（数量）: 右寄せ + 数値フォーマット
+        {
+          repeatCell: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 3,  // D列
+              endColumnIndex: 4
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'RIGHT',
+                numberFormat: {
+                  type: 'NUMBER',
+                  pattern: '#,##0.###'
+                }
+              }
+            },
+            fields: 'userEnteredFormat(horizontalAlignment,numberFormat)'
+          }
+        },
+        // E列（単位）: 中央寄せ
+        {
+          repeatCell: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 4,  // E列
+              endColumnIndex: 5
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'CENTER'
+              }
+            },
+            fields: 'userEnteredFormat.horizontalAlignment'
+          }
+        },
+        // F列（税率）: 中央寄せ
+        {
+          repeatCell: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 5,  // F列
+              endColumnIndex: 6
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'CENTER'
+              }
+            },
+            fields: 'userEnteredFormat.horizontalAlignment'
+          }
+        },
+        // G列（税抜金額）: 右寄せ + 通貨フォーマット
+        {
+          repeatCell: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 6,  // G列
+              endColumnIndex: 7
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'RIGHT',
+                numberFormat: {
+                  type: 'CURRENCY',
+                  pattern: '¥#,##0'
+                }
+              }
+            },
+            fields: 'userEnteredFormat(horizontalAlignment,numberFormat)'
+          }
+        },
+        // H列（消費税）: 右寄せ + 通貨フォーマット
+        {
+          repeatCell: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 7,  // H列
+              endColumnIndex: 8
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'RIGHT',
+                numberFormat: {
+                  type: 'CURRENCY',
+                  pattern: '¥#,##0'
+                }
+              }
+            },
+            fields: 'userEnteredFormat(horizontalAlignment,numberFormat)'
+          }
+        },
+        // I列（備考）: 左寄せ
+        {
+          repeatCell: {
+            range: {
+              sheetId: firstSheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 8,  // I列
+              endColumnIndex: 9
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'LEFT'
+              }
+            },
+            fields: 'userEnteredFormat.horizontalAlignment'
+          }
+        }
+      ];
 
-        await this.sheets.spreadsheets.batchUpdate({
-          spreadsheetId: spreadsheetId,
-          requestBody: {
-            requests: formatRequests
-          }
-        });
-        console.log('✅ Formatting applied successfully');
-      } catch (formatError: any) {
-        console.warn('⚠️ Formatting failed (non-critical):', formatError.message);
-      }
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId,
+        requestBody: {
+          requests: formatRequests
+        }
+      });
+      console.log('✅ Formatting applied successfully (including detail row borders and alignment)');
+    } catch (formatError: any) {
+      console.warn('⚠️ Formatting failed (non-critical):', formatError.message);
     }
 
     console.log('✅ Delivery sheet V2 updated successfully');
@@ -1671,8 +1930,14 @@ class GoogleSheetsClient {
     }
 
     // 明細データ（11行目から開始、10列構造）
+    // H列（税抜金額）とI列（消費税）も計算して書き込む（テンプレート数式に依存しない）
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
+      // 税抜金額と消費税を計算
+      const subtotal = item.unit_price * item.quantity;
+      const taxRateNum = parseInt(item.tax_rate.replace('%', ''), 10) / 100;
+      const taxAmount = Math.floor(subtotal * taxRateNum);
+
       updates.push(
         { range: `'${tabName}'!A${row}`, values: [[item.date]] },
         { range: `'${tabName}'!B${row}`, values: [[item.delivery_destination || '']] },
@@ -1681,26 +1946,50 @@ class GoogleSheetsClient {
         { range: `'${tabName}'!E${row}`, values: [[formatQuantity(item.quantity)]] },
         { range: `'${tabName}'!F${row}`, values: [[item.unit]] },
         { range: `'${tabName}'!G${row}`, values: [[item.tax_rate]] },
+        { range: `'${tabName}'!H${row}`, values: [[subtotal]] },        // H列: 税抜金額（計算値）
+        { range: `'${tabName}'!I${row}`, values: [[taxAmount]] },       // I列: 消費税（計算値）
         { range: `'${tabName}'!J${row}`, values: [[item.notes || '']] }
       );
     });
 
-    // 税率別集計（C53-C56）- 設定されている場合
+    // 集計エリアの位置を動的に計算
+    // 明細終了行 + 3行の空白を確保、ただし最小でも53行目から
+    const itemsEndRow = itemsStartRow + data.items.length - 1;
+    const summaryStartRow = Math.max(itemsEndRow + 3, 53);
+    console.log(`📊 Items: ${data.items.length}, End row: ${itemsEndRow}, Summary starts at row: ${summaryStartRow}`);
+
+    // 税率別集計（動的位置）- 設定されている場合
     if (data.subtotal_8 !== undefined) {
+      // 税率別集計ヘッダー
       updates.push(
-        { range: `'${tabName}'!C53`, values: [[`¥${data.subtotal_8.toLocaleString()}`]] },
-        { range: `'${tabName}'!C54`, values: [[`¥${data.tax_8?.toLocaleString() || '0'}`]] },
-        { range: `'${tabName}'!C55`, values: [[`¥${data.subtotal_10?.toLocaleString() || '0'}`]] },
-        { range: `'${tabName}'!C56`, values: [[`¥${data.tax_10?.toLocaleString() || '0'}`]] }
+        { range: `'${tabName}'!A${summaryStartRow - 1}`, values: [['【税率別集計】']] }
+      );
+      // 税率別集計の値
+      updates.push(
+        { range: `'${tabName}'!C${summaryStartRow}`, values: [[`¥${data.subtotal_8.toLocaleString()}`]] },
+        { range: `'${tabName}'!C${summaryStartRow + 1}`, values: [[`¥${data.tax_8?.toLocaleString() || '0'}`]] },
+        { range: `'${tabName}'!C${summaryStartRow + 2}`, values: [[`¥${data.subtotal_10?.toLocaleString() || '0'}`]] },
+        { range: `'${tabName}'!C${summaryStartRow + 3}`, values: [[`¥${data.tax_10?.toLocaleString() || '0'}`]] }
+      );
+      // 税率別集計のラベル
+      updates.push(
+        { range: `'${tabName}'!B${summaryStartRow}`, values: [['8%対象']] },
+        { range: `'${tabName}'!B${summaryStartRow + 1}`, values: [['消費税(8%)']] },
+        { range: `'${tabName}'!B${summaryStartRow + 2}`, values: [['10%対象']] },
+        { range: `'${tabName}'!B${summaryStartRow + 3}`, values: [['消費税(10%)']] }
       );
     }
 
-    // 小計・消費税・合計（H58-H60）- 設定されている場合
+    // 小計・消費税・合計（動的位置）- 設定されている場合
+    const totalStartRow = summaryStartRow + 5;
     if (data.subtotal !== undefined) {
       updates.push(
-        { range: `'${tabName}'!H58`, values: [[`¥${data.subtotal.toLocaleString()}`]] },
-        { range: `'${tabName}'!H59`, values: [[`¥${data.total_tax?.toLocaleString() || '0'}`]] },
-        { range: `'${tabName}'!H60`, values: [[`¥${data.total_amount?.toLocaleString() || '0'}`]] }
+        { range: `'${tabName}'!G${totalStartRow}`, values: [['小計']] },
+        { range: `'${tabName}'!H${totalStartRow}`, values: [[`¥${data.subtotal.toLocaleString()}`]] },
+        { range: `'${tabName}'!G${totalStartRow + 1}`, values: [['消費税']] },
+        { range: `'${tabName}'!H${totalStartRow + 1}`, values: [[`¥${data.total_tax?.toLocaleString() || '0'}`]] },
+        { range: `'${tabName}'!G${totalStartRow + 2}`, values: [['合計']] },
+        { range: `'${tabName}'!H${totalStartRow + 2}`, values: [[`¥${data.total_amount?.toLocaleString() || '0'}`]] }
       );
     }
 
@@ -1718,6 +2007,71 @@ class GoogleSheetsClient {
     // 書式設定（合計金額が設定されている場合のみ）
     if (data.total_amount !== undefined) {
       const formatRequests = [
+        // ========================================
+        // 1. 旧テンプレートの固定集計エリア（52-60行目）の書式をクリア
+        // テンプレートのボールド等の書式が残る問題を解決
+        // ========================================
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 51,   // 52行目（0-indexed）
+              endRowIndex: 60,     // 60行目まで
+              startColumnIndex: 0, // A列から
+              endColumnIndex: 10   // J列まで
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: {
+                  bold: false,      // ボールド解除
+                  fontSize: 10      // 標準フォントサイズ
+                }
+              }
+            },
+            fields: 'userEnteredFormat.textFormat'
+          }
+        },
+        // 明細終了後〜集計開始前のエリアをクリア（旧テンプレートの残骸を削除）
+        // 注意: 明細データがある行は消さない
+        ...(itemsEndRow < summaryStartRow - 2 ? [{
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsEndRow,           // 明細最終行の次から
+              endRowIndex: summaryStartRow - 2,     // 集計ヘッダーの前まで
+              startColumnIndex: 0, // A列から
+              endColumnIndex: 10   // J列まで
+            },
+            cell: {
+              userEnteredValue: {
+                stringValue: ''
+              }
+            },
+            fields: 'userEnteredValue'
+          }
+        }] : []),
+        // ========================================
+        // 2. 明細行（11行目〜itemsEndRow）に枠線を適用
+        // テンプレートの枠線範囲外の明細行にも枠線を付ける
+        // ========================================
+        {
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,  // 11行目（0-indexed で 10）
+              endRowIndex: itemsEndRow,           // 明細最終行まで
+              startColumnIndex: 0,  // A列
+              endColumnIndex: 10    // J列まで
+            },
+            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerHorizontal: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerVertical: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
+        // ========================================
         // C7のフォーマット（ラベル）
         {
           repeatCell: {
@@ -1800,6 +2154,254 @@ class GoogleSheetsClient {
             },
             fields: 'userEnteredFormat.numberFormat'
           }
+        },
+        // ========================================
+        // 3. 明細行のアラインメントと数値フォーマットを設定
+        // 51行目以降でも正しいフォーマットが適用されるよう全明細行に設定
+        // ========================================
+        // A列（日付）: 中央寄せ
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 0,  // A列
+              endColumnIndex: 1
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'CENTER'
+              }
+            },
+            fields: 'userEnteredFormat.horizontalAlignment'
+          }
+        },
+        // B列（納品先）: 左寄せ
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 1,  // B列
+              endColumnIndex: 2
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'LEFT'
+              }
+            },
+            fields: 'userEnteredFormat.horizontalAlignment'
+          }
+        },
+        // C列（品名）: 左寄せ
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 2,  // C列
+              endColumnIndex: 3
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'LEFT'
+              }
+            },
+            fields: 'userEnteredFormat.horizontalAlignment'
+          }
+        },
+        // D列（単価）: 右寄せ + 通貨フォーマット
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 3,  // D列
+              endColumnIndex: 4
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'RIGHT',
+                numberFormat: {
+                  type: 'CURRENCY',
+                  pattern: '¥#,##0'
+                }
+              }
+            },
+            fields: 'userEnteredFormat(horizontalAlignment,numberFormat)'
+          }
+        },
+        // E列（数量）: 右寄せ
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 4,  // E列
+              endColumnIndex: 5
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'RIGHT'
+              }
+            },
+            fields: 'userEnteredFormat.horizontalAlignment'
+          }
+        },
+        // F列（単位）: 中央寄せ
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 5,  // F列
+              endColumnIndex: 6
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'CENTER'
+              }
+            },
+            fields: 'userEnteredFormat.horizontalAlignment'
+          }
+        },
+        // G列（税率）: 中央寄せ
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 6,  // G列
+              endColumnIndex: 7
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'CENTER'
+              }
+            },
+            fields: 'userEnteredFormat.horizontalAlignment'
+          }
+        },
+        // H列（税抜金額）: 右寄せ + 通貨フォーマット
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 7,  // H列
+              endColumnIndex: 8
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'RIGHT',
+                numberFormat: {
+                  type: 'CURRENCY',
+                  pattern: '¥#,##0'
+                }
+              }
+            },
+            fields: 'userEnteredFormat(horizontalAlignment,numberFormat)'
+          }
+        },
+        // I列（消費税）: 右寄せ + 通貨フォーマット
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 8,  // I列
+              endColumnIndex: 9
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'RIGHT',
+                numberFormat: {
+                  type: 'CURRENCY',
+                  pattern: '¥#,##0'
+                }
+              }
+            },
+            fields: 'userEnteredFormat(horizontalAlignment,numberFormat)'
+          }
+        },
+        // J列（備考）: 左寄せ
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,
+              endRowIndex: itemsStartRow - 1 + data.items.length,
+              startColumnIndex: 9,  // J列
+              endColumnIndex: 10
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'LEFT'
+              }
+            },
+            fields: 'userEnteredFormat.horizontalAlignment'
+          }
+        },
+        // 【税率別集計】ヘッダーの枠線（動的位置）
+        {
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: summaryStartRow - 2,  // 【税率別集計】行（0-indexed）
+              endRowIndex: summaryStartRow - 1,
+              startColumnIndex: 0,  // A列
+              endColumnIndex: 1
+            },
+            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
+        // 税率別集計エリア（B:C列）の枠線（動的位置）
+        {
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: summaryStartRow - 1,  // 8%対象の行から（0-indexed）
+              endRowIndex: summaryStartRow + 3,     // 消費税(10%)の行まで
+              startColumnIndex: 1,  // B列
+              endColumnIndex: 3     // C列まで
+            },
+            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerHorizontal: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerVertical: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
+        // 小計・消費税・合計エリア（G:H列）の枠線（動的位置）
+        {
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: totalStartRow - 1,    // 小計の行から（0-indexed）
+              endRowIndex: totalStartRow + 2,       // 合計の行まで
+              startColumnIndex: 6,  // G列
+              endColumnIndex: 8     // H列まで
+            },
+            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerHorizontal: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerVertical: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
+          }
         }
       ];
 
@@ -1809,7 +2411,7 @@ class GoogleSheetsClient {
           requests: formatRequests
         }
       });
-      console.log('✅ Formatting applied successfully');
+      console.log('✅ Formatting applied successfully (including dynamic borders)');
     }
 
     console.log('✅ Invoice sheet V2 with tab name updated successfully');
@@ -1928,6 +2530,46 @@ class GoogleSheetsClient {
       );
     });
 
+    // 集計エリアの位置を動的に計算
+    // 明細終了行 + 3行の空白を確保、ただし最小でも53行目から
+    const itemsEndRow = itemsStartRow + data.items.length - 1;
+    const summaryStartRow = Math.max(itemsEndRow + 3, 53);
+    console.log(`📊 Items: ${data.items.length}, End row: ${itemsEndRow}, Summary starts at row: ${summaryStartRow}`);
+
+    // 税率別集計（動的位置）- 設定されている場合
+    if (data.subtotal_8 !== undefined) {
+      // 【税率別集計】ヘッダー
+      updates.push(
+        { range: `A${summaryStartRow - 1}`, values: [['【税率別集計】']] }
+      );
+      updates.push(
+        { range: `C${summaryStartRow}`, values: [[`¥${data.subtotal_8.toLocaleString()}`]] },
+        { range: `C${summaryStartRow + 1}`, values: [[`¥${data.tax_8?.toLocaleString() || '0'}`]] },
+        { range: `C${summaryStartRow + 2}`, values: [[`¥${data.subtotal_10?.toLocaleString() || '0'}`]] },
+        { range: `C${summaryStartRow + 3}`, values: [[`¥${data.tax_10?.toLocaleString() || '0'}`]] }
+      );
+      // 税率別集計のラベルも追加（テンプレートにない場合に備えて）
+      updates.push(
+        { range: `B${summaryStartRow}`, values: [['8%対象']] },
+        { range: `B${summaryStartRow + 1}`, values: [['消費税(8%)']] },
+        { range: `B${summaryStartRow + 2}`, values: [['10%対象']] },
+        { range: `B${summaryStartRow + 3}`, values: [['消費税(10%)']] }
+      );
+    }
+
+    // 小計・消費税・合計（動的位置）- 設定されている場合
+    const totalStartRow = summaryStartRow + 5;
+    if (data.subtotal !== undefined) {
+      updates.push(
+        { range: `G${totalStartRow}`, values: [['小計']] },
+        { range: `H${totalStartRow}`, values: [[`¥${data.subtotal.toLocaleString()}`]] },
+        { range: `G${totalStartRow + 1}`, values: [['消費税']] },
+        { range: `H${totalStartRow + 1}`, values: [[`¥${data.total_tax?.toLocaleString() || '0'}`]] },
+        { range: `G${totalStartRow + 2}`, values: [['合計']] },
+        { range: `H${totalStartRow + 2}`, values: [[`¥${data.total_amount?.toLocaleString() || '0'}`]] }
+      );
+    }
+
     console.log('📊 Batch update ranges V2:', updates.map(u => u.range));
 
     // 一括更新
@@ -1938,6 +2580,143 @@ class GoogleSheetsClient {
         data: updates
       }
     });
+
+    // 枠線のフォーマットを適用（動的位置の集計エリア）
+    if (data.subtotal_8 !== undefined) {
+      // シートID取得（最初のシート）
+      const spreadsheet = await this.sheets.spreadsheets.get({
+        spreadsheetId: spreadsheetId,
+      });
+      const sheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId || 0;
+
+      const borderRequests = [
+        // ========================================
+        // 1. 旧テンプレートの固定集計エリア（52-60行目）の書式をクリア
+        // テンプレートのボールド等の書式が残る問題を解決
+        // ========================================
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 51,   // 52行目（0-indexed）
+              endRowIndex: 60,     // 60行目まで
+              startColumnIndex: 0, // A列から
+              endColumnIndex: 10   // J列まで
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: {
+                  bold: false,      // ボールド解除
+                  fontSize: 10      // 標準フォントサイズ
+                }
+              }
+            },
+            fields: 'userEnteredFormat.textFormat'
+          }
+        },
+        // 明細終了後〜集計開始前のエリアをクリア（旧テンプレートの残骸を削除）
+        // 注意: 明細データがある行は消さない
+        ...(itemsEndRow < summaryStartRow - 2 ? [{
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsEndRow,           // 明細最終行の次から
+              endRowIndex: summaryStartRow - 2,     // 集計ヘッダーの前まで
+              startColumnIndex: 0, // A列から
+              endColumnIndex: 10   // J列まで
+            },
+            cell: {
+              userEnteredValue: {
+                stringValue: ''
+              }
+            },
+            fields: 'userEnteredValue'
+          }
+        }] : []),
+        // ========================================
+        // 2. 明細行（11行目〜itemsEndRow）に枠線を適用
+        // テンプレートの枠線範囲外の明細行にも枠線を付ける
+        // ========================================
+        {
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: itemsStartRow - 1,  // 11行目（0-indexed で 10）
+              endRowIndex: itemsEndRow,           // 明細最終行まで
+              startColumnIndex: 0,  // A列
+              endColumnIndex: 10    // J列まで
+            },
+            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerHorizontal: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerVertical: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
+        // ========================================
+        // 【税率別集計】ヘッダーの枠線（動的位置）
+        {
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: summaryStartRow - 2,  // 【税率別集計】行（0-indexed）
+              endRowIndex: summaryStartRow - 1,
+              startColumnIndex: 0,  // A列
+              endColumnIndex: 1
+            },
+            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
+        // 税率別集計エリア（B:C列）の枠線（動的位置）
+        {
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: summaryStartRow - 1,  // 8%対象の行から（0-indexed）
+              endRowIndex: summaryStartRow + 3,     // 消費税(10%)の行まで
+              startColumnIndex: 1,  // B列
+              endColumnIndex: 3     // C列まで
+            },
+            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerHorizontal: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerVertical: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
+        // 小計・消費税・合計エリア（G:H列）の枠線（動的位置）
+        {
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: totalStartRow - 1,    // 小計の行から（0-indexed）
+              endRowIndex: totalStartRow + 2,       // 合計の行まで
+              startColumnIndex: 6,  // G列
+              endColumnIndex: 8     // H列まで
+            },
+            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerHorizontal: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            innerVertical: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
+          }
+        }
+      ];
+
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId,
+        requestBody: {
+          requests: borderRequests
+        }
+      });
+      console.log('✅ Border formatting applied to summary area');
+    }
 
     console.log('✅ Invoice sheet V2 updated successfully');
   }
