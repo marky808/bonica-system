@@ -15,7 +15,6 @@ interface InvoiceHistoryItem {
   issueDate: string
   customerName: string
   amount: number
-  status: "draft" | "sent" | "paid"
   fileName: string
 }
 
@@ -27,7 +26,7 @@ const mockInvoiceHistory: InvoiceHistoryItem[] = [
     issueDate: "2024-01-31",
     customerName: "ABC市場",
     amount: 450000,
-    status: "paid",
+
     fileName: "請求書_ABC市場_2024年1月.pdf",
   },
   {
@@ -36,7 +35,7 @@ const mockInvoiceHistory: InvoiceHistoryItem[] = [
     issueDate: "2024-01-31",
     customerName: "DEF農協",
     amount: 720000,
-    status: "sent",
+
     fileName: "請求書_DEF農協_2024年1月.pdf",
   },
   {
@@ -45,7 +44,7 @@ const mockInvoiceHistory: InvoiceHistoryItem[] = [
     issueDate: "2024-01-15",
     customerName: "ABC市場",
     amount: 90000,
-    status: "sent",
+
     fileName: "納品書_ABC市場_20240115.pdf",
   },
   {
@@ -54,7 +53,7 @@ const mockInvoiceHistory: InvoiceHistoryItem[] = [
     issueDate: "2024-01-14",
     customerName: "XYZ青果店",
     amount: 60000,
-    status: "sent",
+
     fileName: "納品書_XYZ青果店_20240114.pdf",
   },
   {
@@ -63,7 +62,7 @@ const mockInvoiceHistory: InvoiceHistoryItem[] = [
     issueDate: "2023-12-31",
     customerName: "ABC市場",
     amount: 380000,
-    status: "paid",
+
     fileName: "請求書_ABC市場_2023年12月.pdf",
   },
 ]
@@ -83,7 +82,7 @@ export function InvoiceHistory({ onDownload }: InvoiceHistoryProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [customerFilter, setCustomerFilter] = useState("all")
-  const [statusFilter, setStatusFilter] = useState("all")
+
   const [monthFilter, setMonthFilter] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
@@ -105,21 +104,12 @@ export function InvoiceHistory({ onDownload }: InvoiceHistoryProps) {
     return type === "invoice" ? <FileText className="h-4 w-4" /> : <Receipt className="h-4 w-4" />
   }
 
-  const getStatusBadge = (status: InvoiceHistoryItem["status"]) => {
-    switch (status) {
-      case "draft":
-        return <Badge variant="outline">下書き</Badge>
-      case "sent":
-        return (
-          <Badge variant="secondary" className="bg-blue-500 text-white">
-            送信済み
-          </Badge>
-        )
-      case "paid":
-        return <Badge className="bg-primary">支払済み</Badge>
-      default:
-        return <Badge variant="outline">不明</Badge>
-    }
+  const getStatusBadge = () => {
+    return (
+      <Badge variant="secondary" className="bg-blue-500 text-white">
+        発行済み
+      </Badge>
+    )
   }
 
   const filteredHistory = mockInvoiceHistory.filter((item) => {
@@ -130,7 +120,7 @@ export function InvoiceHistory({ onDownload }: InvoiceHistoryProps) {
 
     const matchesType = typeFilter === "all" || item.type === typeFilter
     const matchesCustomer = customerFilter === "all" || item.customerName === customerFilter
-    const matchesStatus = statusFilter === "all" || item.status === statusFilter
+
     const matchesMonth = monthFilter === "all" || item.issueDate.startsWith(`2024-${monthFilter.padStart(2, "0")}`)
     const matchesDateFrom = !dateFrom || item.issueDate >= dateFrom
     const matchesDateTo = !dateTo || item.issueDate <= dateTo
@@ -139,7 +129,6 @@ export function InvoiceHistory({ onDownload }: InvoiceHistoryProps) {
       matchesSearch &&
       matchesType &&
       matchesCustomer &&
-      matchesStatus &&
       matchesMonth &&
       matchesDateFrom &&
       matchesDateTo
@@ -158,7 +147,7 @@ export function InvoiceHistory({ onDownload }: InvoiceHistoryProps) {
     setSearchQuery("")
     setTypeFilter("all")
     setCustomerFilter("all")
-    setStatusFilter("all")
+
     setMonthFilter("all")
     setDateFrom("")
     setDateTo("")
@@ -195,7 +184,7 @@ export function InvoiceHistory({ onDownload }: InvoiceHistoryProps) {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <Select value={monthFilter} onValueChange={setMonthFilter}>
               <SelectTrigger className="h-12">
                 <SelectValue placeholder="月別" />
@@ -239,18 +228,6 @@ export function InvoiceHistory({ onDownload }: InvoiceHistoryProps) {
                     {customer.name}
                   </SelectItem>
                 ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-12">
-                <SelectValue placeholder="ステータス" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">すべてのステータス</SelectItem>
-                <SelectItem value="draft">下書き</SelectItem>
-                <SelectItem value="sent">送信済み</SelectItem>
-                <SelectItem value="paid">支払済み</SelectItem>
               </SelectContent>
             </Select>
 
@@ -299,7 +276,7 @@ export function InvoiceHistory({ onDownload }: InvoiceHistoryProps) {
                   <TableCell className="font-mono text-sm">{item.id}</TableCell>
                   <TableCell className="font-medium">{item.customerName}</TableCell>
                   <TableCell>{formatCurrency(item.amount)}</TableCell>
-                  <TableCell>{getStatusBadge(item.status)}</TableCell>
+                  <TableCell>{getStatusBadge()}</TableCell>
                   <TableCell>
                     <Button variant="outline" size="sm" onClick={() => handleDownload(item)}>
                       <Download className="h-4 w-4 mr-2" />

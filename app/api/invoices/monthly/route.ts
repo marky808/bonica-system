@@ -379,7 +379,7 @@ export async function POST(request: NextRequest) {
         month: month,
         year: year,
         totalAmount: totalAmount,
-        status: 'DRAFT',
+        status: 'ISSUED',
         googleSheetId: result.spreadsheetId,
         googleSheetUrl: result.spreadsheetUrl,
         deliveryIds: JSON.stringify(deliveries.map(d => d.id)),
