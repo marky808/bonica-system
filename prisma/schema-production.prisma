@@ -142,7 +142,7 @@ model Invoice {
   month           Int
   year            Int
   totalAmount     Float
-  status          String        @default("DRAFT")
+  status          String        @default("ISSUED")
   freeeInvoiceId  String?
   googleSheetId   String?
   googleSheetUrl  String?

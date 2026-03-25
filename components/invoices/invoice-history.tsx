@@ -15,7 +15,7 @@ interface InvoiceHistoryItem {
   issueDate: string
   customerName: string
   amount: number
-  status: "draft" | "sent" | "paid"
+  status: "unissued" | "issued"
   fileName: string
 }
 
@@ -27,7 +27,7 @@ const mockInvoiceHistory: InvoiceHistoryItem[] = [
     issueDate: "2024-01-31",
     customerName: "ABC市場",
     amount: 450000,
-    status: "paid",
+    status: "issued",
     fileName: "請求書_ABC市場_2024年1月.pdf",
   },
   {
@@ -36,7 +36,7 @@ const mockInvoiceHistory: InvoiceHistoryItem[] = [
     issueDate: "2024-01-31",
     customerName: "DEF農協",
     amount: 720000,
-    status: "sent",
+    status: "issued",
     fileName: "請求書_DEF農協_2024年1月.pdf",
   },
   {
@@ -45,7 +45,7 @@ const mockInvoiceHistory: InvoiceHistoryItem[] = [
     issueDate: "2024-01-15",
     customerName: "ABC市場",
     amount: 90000,
-    status: "sent",
+    status: "issued",
     fileName: "納品書_ABC市場_20240115.pdf",
   },
   {
@@ -54,7 +54,7 @@ const mockInvoiceHistory: InvoiceHistoryItem[] = [
     issueDate: "2024-01-14",
     customerName: "XYZ青果店",
     amount: 60000,
-    status: "sent",
+    status: "issued",
     fileName: "納品書_XYZ青果店_20240114.pdf",
   },
   {
@@ -63,7 +63,7 @@ const mockInvoiceHistory: InvoiceHistoryItem[] = [
     issueDate: "2023-12-31",
     customerName: "ABC市場",
     amount: 380000,
-    status: "paid",
+    status: "issued",
     fileName: "請求書_ABC市場_2023年12月.pdf",
   },
 ]
@@ -107,16 +107,14 @@ export function InvoiceHistory({ onDownload }: InvoiceHistoryProps) {
 
   const getStatusBadge = (status: InvoiceHistoryItem["status"]) => {
     switch (status) {
-      case "draft":
-        return <Badge variant="outline">下書き</Badge>
-      case "sent":
+      case "issued":
         return (
           <Badge variant="secondary" className="bg-blue-500 text-white">
-            送信済み
+            発行済み
           </Badge>
         )
-      case "paid":
-        return <Badge className="bg-primary">支払済み</Badge>
+      case "unissued":
+        return <Badge variant="outline">未発行</Badge>
       default:
         return <Badge variant="outline">不明</Badge>
     }
@@ -248,9 +246,8 @@ export function InvoiceHistory({ onDownload }: InvoiceHistoryProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">すべてのステータス</SelectItem>
-                <SelectItem value="draft">下書き</SelectItem>
-                <SelectItem value="sent">送信済み</SelectItem>
-                <SelectItem value="paid">支払済み</SelectItem>
+                <SelectItem value="unissued">未発行</SelectItem>
+                <SelectItem value="issued">発行済み</SelectItem>
               </SelectContent>
             </Select>
 

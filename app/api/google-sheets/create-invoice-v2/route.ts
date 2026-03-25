@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
         totalAmount: totalAmount,
-        status: 'DRAFT',
+        status: 'ISSUED',
         googleSheetId: result.sheetId,
         googleSheetUrl: result.url,
         deliveryIds: JSON.stringify(deliveries.map(d => d.id))

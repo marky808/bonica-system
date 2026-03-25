@@ -69,7 +69,7 @@ export interface DeliveryItem {
 }
 
 export type DeliveryStatus = "pending" | "slip_issued" | "invoice_ready"
-export type InvoiceStatus = "draft" | "issued"
+export type InvoiceStatus = "unissued" | "issued"
 
 export interface Delivery {
   id: string
@@ -90,7 +90,7 @@ export interface Invoice {
   deliveries: string[]
   totalAmount: number
   generatedAt: string
-  status: InvoiceStatus // "paid"ステータスを削除、freee連携想定
+  status: InvoiceStatus
   freeeInvoiceId?: string // freee連携用ID追加
 }
 
