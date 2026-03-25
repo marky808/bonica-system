@@ -231,7 +231,7 @@ export function InvoiceHistory({ onDownload }: InvoiceHistoryProps) {
               </SelectContent>
             </Select>
 
-<Input
+            <Input
               type="date"
               placeholder="開始日"
               value={dateFrom}
