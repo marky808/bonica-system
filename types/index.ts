@@ -69,7 +69,7 @@ export interface DeliveryItem {
 }
 
 export type DeliveryStatus = "pending" | "slip_issued" | "invoice_ready"
-export type InvoiceStatus = "unissued" | "issued"
+export type InvoiceStatus = "issued"
 
 export interface Delivery {
   id: string
