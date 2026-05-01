@@ -24,8 +24,8 @@ model Category {
   name          String         @unique
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
-  purchases     Purchase[]
   deliveryItems DeliveryItem[]
+  purchases     Purchase[]
 
   @@map("categories")
 }
@@ -39,9 +39,9 @@ model Supplier {
   paymentTerms              String
   deliveryConditions        String
   specialNotes              String?
-  invoiceRegistrationNumber String?
   createdAt                 DateTime   @default(now())
   updatedAt                 DateTime   @updatedAt
+  invoiceRegistrationNumber String?
   purchases                 Purchase[]
 
   @@map("suppliers")
@@ -60,16 +60,16 @@ model Customer {
   billingCycle              String     @default("monthly")
   billingDay                Int        @default(31)
   paymentTerms              String     @default("30days")
-  invoiceRegistrationNumber String?
-  invoiceNotes              String?
-  billingCustomerId         String?
   createdAt                 DateTime   @default(now())
   updatedAt                 DateTime   @updatedAt
   name                      String     @default("")
   address                   String     @default("")
-  deliveries                Delivery[]
+  invoiceNotes              String?
+  invoiceRegistrationNumber String?
+  billingCustomerId         String?
   billingCustomer           Customer?  @relation("BillingRelation", fields: [billingCustomerId], references: [id])
   deliveryCustomers         Customer[] @relation("BillingRelation")
+  deliveries                Delivery[]
 
   @@map("customers")
 }
@@ -87,7 +87,6 @@ model ProductPrefix {
 model Purchase {
   id                String         @id @default(cuid())
   productName       String
-  productPrefixId   String?
   categoryId        String
   quantity          Float
   unit              String
@@ -104,46 +103,38 @@ model Purchase {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
   name              String         @default("")
+  productPrefixId   String?
   notes             String?
   deliveryItems     DeliveryItem[]
-  supplier          Supplier       @relation(fields: [supplierId], references: [id])
   category          Category       @relation(fields: [categoryId], references: [id])
   productPrefix     ProductPrefix? @relation(fields: [productPrefixId], references: [id])
+  supplier          Supplier       @relation(fields: [supplierId], references: [id])
 
   @@map("purchases")
 }
 
 model Delivery {
   id                  String         @id @default(cuid())
+  deliveryNumber      String?        @unique @map("delivery_number")
   customerId          String
   deliveryDate        DateTime
   totalAmount         Float
   status              String         @default("PENDING")
+  notes               String?
   freeeDeliverySlipId String?
   freeeInvoiceId      String?
   googleSheetId       String?
   googleSheetUrl      String?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
-  deliveryNumber      String?        @unique @map("delivery_number")
-  notes               String?
-  // 入力モード: NORMAL(通常=仕入れから選択), DIRECT(直接入力)
   inputMode           String         @default("NORMAL")
-  // 仕入れ紐付けステータス: LINKED(紐付け済み), UNLINKED(未紐付け)
   purchaseLinkStatus  String         @default("LINKED")
-
-  // === 赤伝機能用フィールド ===
-  // 種別: NORMAL(通常納品), RETURN(赤伝/返品)
-  type                String         @default("NORMAL")
-  // 赤伝の場合、元の納品ID（任意）
   originalDeliveryId  String?
+  returnReason        String?
+  type                String         @default("NORMAL")
+  customer            Customer       @relation(fields: [customerId], references: [id])
   originalDelivery    Delivery?      @relation("ReturnRelation", fields: [originalDeliveryId], references: [id])
   returns             Delivery[]     @relation("ReturnRelation")
-  // 返品理由
-  returnReason        String?
-  // ============================
-
-  customer            Customer       @relation(fields: [customerId], references: [id])
   items               DeliveryItem[]
 
   @@map("deliveries")
@@ -152,39 +143,41 @@ model Delivery {
 model DeliveryItem {
   id           String    @id @default(cuid())
   deliveryId   String
-  purchaseId   String?   // null許容: 直接入力モードの場合はnull
+  purchaseId   String?
   quantity     Float
   unitPrice    Float
   amount       Float
   deliveryDate DateTime?
-  unit         String?
   taxRate      Int       @default(8)
-  // 直接入力モード用フィールド
-  productName  String?   // 直接入力時の商品名
-  categoryId   String?   // 直接入力時のカテゴリー
-  notes        String?   // 備考
-  purchase     Purchase? @relation(fields: [purchaseId], references: [id])
-  delivery     Delivery  @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  unit         String?
+  categoryId   String?
+  notes        String?
+  productName  String?
   category     Category? @relation(fields: [categoryId], references: [id])
+  delivery     Delivery  @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  purchase     Purchase? @relation(fields: [purchaseId], references: [id])
 
   @@map("delivery_items")
 }
 
 model Invoice {
-  id             String   @id @default(cuid())
-  invoice_number String   @unique
-  customerId     String
-  invoiceDate    DateTime
-  month          Int
-  year           Int
-  totalAmount    Float
-  status         String   @default("ISSUED")
-  freeeInvoiceId String?
-  googleSheetId  String?
-  googleSheetUrl String?
-  deliveryIds    String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                           String                        @id @default(cuid())
+  invoice_number               String                        @unique
+  customerId                   String
+  invoiceDate                  DateTime
+  month                        Int
+  year                         Int
+  totalAmount                  Float
+  status                   String                       @default("ISSUED")
+  freeeInvoiceId           String?
+  googleSheetId            String?
+  googleSheetUrl           String?
+  deliveryIds              String
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @updatedAt
+  monthlySpreadsheetId     String?
+  sheetTabName             String?
+  monthlyInvoiceSpreadsheet MonthlyInvoiceSpreadsheet? @relation(fields: [monthlySpreadsheetId], references: [id])
 
   @@map("invoices")
 }
@@ -198,4 +191,18 @@ model GoogleSheetTemplate {
   updatedAt       DateTime @updatedAt
 
   @@map("google_sheet_templates")
+}
+
+model MonthlyInvoiceSpreadsheet {
+  id             String    @id @default(cuid())
+  year           Int
+  month          Int
+  spreadsheetId  String    @unique
+  spreadsheetUrl String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  invoices       Invoice[]
+
+  @@unique([year, month])
+  @@map("monthly_invoice_spreadsheets")
 }
