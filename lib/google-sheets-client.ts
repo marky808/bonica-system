@@ -1106,13 +1106,8 @@ class GoogleSheetsClient {
       { range: 'C4', values: [[`納品書番号: ${data.delivery_number}`]] }
     );
 
-    // 合計金額を上部に表示（A7:B7）- 各セルに黒枠
-    if (data.total_amount !== undefined) {
-      updates.push(
-        { range: 'A7', values: [['合計金額']] },
-        { range: 'B7', values: [[`¥${data.total_amount.toLocaleString()}`]] }
-      );
-    }
+    // 合計金額は明細下部の合計行（F-I列）にのみ表示する。
+    // 上部 A7:B7 への重複書き込みは廃止（顧客視点での二重表示を回避）。
 
     // 明細データ（11行目から開始、9列構造）
     // A:日付, B:品名, C:単価, D:数量, E:単位, F:税率, G:税抜金額, H:消費税, I:備考
@@ -1208,87 +1203,9 @@ class GoogleSheetsClient {
       }
     });
 
-    // 合計金額の書式設定（A7:B7、各セルに黒枠 + 明細下部の合計行）
+    // 書式設定（明細下部の合計行 + 明細行枠線・アラインメント）
     try {
       const formatRequests = [
-        // A7のフォーマット（ラベル「合計金額」）
-        {
-          repeatCell: {
-            range: {
-              sheetId: firstSheetId,
-              startRowIndex: 6,
-              endRowIndex: 7,
-              startColumnIndex: 0,  // A列
-              endColumnIndex: 1
-            },
-            cell: {
-              userEnteredFormat: {
-                textFormat: {
-                  fontSize: 14,
-                  bold: true
-                },
-                horizontalAlignment: 'CENTER',
-                verticalAlignment: 'MIDDLE'
-              }
-            },
-            fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
-          }
-        },
-        // B7のフォーマット（金額）
-        {
-          repeatCell: {
-            range: {
-              sheetId: firstSheetId,
-              startRowIndex: 6,
-              endRowIndex: 7,
-              startColumnIndex: 1,  // B列
-              endColumnIndex: 2
-            },
-            cell: {
-              userEnteredFormat: {
-                textFormat: {
-                  fontSize: 16,
-                  bold: true
-                },
-                horizontalAlignment: 'CENTER',
-                verticalAlignment: 'MIDDLE'
-              }
-            },
-            fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
-          }
-        },
-        // A7に黒枠を追加
-        {
-          updateBorders: {
-            range: {
-              sheetId: firstSheetId,
-              startRowIndex: 6,
-              endRowIndex: 7,
-              startColumnIndex: 0,  // A列
-              endColumnIndex: 1
-            },
-            top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-            bottom: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-            left: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-            right: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
-          }
-        },
-        // B7に黒枠を追加
-        {
-          updateBorders: {
-            range: {
-              sheetId: firstSheetId,
-              startRowIndex: 6,
-              endRowIndex: 7,
-              startColumnIndex: 1,  // B列
-              endColumnIndex: 2
-            },
-            top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-            bottom: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-            left: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-            right: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
-          }
-        },
         // 明細下部の合計行（F-I列）のフォーマット
         {
           repeatCell: {
@@ -1921,13 +1838,8 @@ class GoogleSheetsClient {
       { range: `'${tabName}'!D4`, values: [[`請求書番号: ${data.invoice_number}`]] }
     );
 
-    // ご請求金額欄（C7:D7）- 合計金額が設定されている場合
-    if (data.total_amount !== undefined) {
-      updates.push(
-        { range: `'${tabName}'!C7`, values: [['ご請求金額']] },
-        { range: `'${tabName}'!D7`, values: [[`¥${data.total_amount.toLocaleString()}`]] }
-      );
-    }
+    // 合計金額は明細下部の合計行（G/H列）にのみ表示する。
+    // 上部 C7:D7 への重複書き込みは廃止（納品書と同様、顧客視点での二重表示を回避）。
 
     // 明細データ（11行目から開始、10列構造）
     // H列（税抜金額）とI列（消費税）も計算して書き込む（テンプレート数式に依存しない）
@@ -2072,68 +1984,6 @@ class GoogleSheetsClient {
           }
         },
         // ========================================
-        // C7のフォーマット（ラベル）
-        {
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: 6,
-              endRowIndex: 7,
-              startColumnIndex: 2,  // C列
-              endColumnIndex: 3
-            },
-            cell: {
-              userEnteredFormat: {
-                textFormat: {
-                  fontSize: 14,
-                  bold: true
-                },
-                horizontalAlignment: 'LEFT',
-                verticalAlignment: 'MIDDLE'
-              }
-            },
-            fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
-          }
-        },
-        // D7のフォーマット（金額）
-        {
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: 6,
-              endRowIndex: 7,
-              startColumnIndex: 3,  // D列
-              endColumnIndex: 4
-            },
-            cell: {
-              userEnteredFormat: {
-                textFormat: {
-                  fontSize: 16,
-                  bold: true
-                },
-                horizontalAlignment: 'LEFT',
-                verticalAlignment: 'MIDDLE'
-              }
-            },
-            fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
-          }
-        },
-        // C7:D7に枠線を追加
-        {
-          updateBorders: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: 6,
-              endRowIndex: 7,
-              startColumnIndex: 2,  // C列
-              endColumnIndex: 4     // D列まで
-            },
-            top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-            bottom: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-            left: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } },
-            right: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
-          }
-        },
         // E列（数量）の数値形式を設定 - 整数は小数点なし、小数は表示（明細行）
         {
           repeatCell: {
