@@ -27,6 +27,24 @@ interface MonthlyDeliveryData {
   deliveryIds: string[]
 }
 
+/**
+ * 対象月の締め日が今日より未来か判定する。
+ * APIの calculateBillingPeriod (app/api/invoices/monthly/route.ts) と整合させる。
+ * - billingDay >= 28 は月末締め扱い（対象月の末日）
+ * - それ以外は対象月の billingDay 日が締め日
+ */
+const isBeforeBillingDay = (year: number, month: number, billingDay: number): boolean => {
+  const today = new Date()
+  if (billingDay >= 28) {
+    const lastDay = new Date(year, month, 0)
+    lastDay.setHours(23, 59, 59, 999)
+    return today < lastDay
+  }
+  const billingDate = new Date(year, month - 1, billingDay)
+  billingDate.setHours(23, 59, 59, 999)
+  return today < billingDate
+}
+
 // 動的に月のオプションを生成
 const generateMonthOptions = () => {
   const options = []
@@ -79,6 +97,15 @@ export function InvoiceCreation({ onInvoiceGenerated }: InvoiceCreationProps) {
   const totalCustomers = filteredData.length
   const generatedCount = filteredData.filter((data) => data.hasInvoice).length
   const progressPercentage = totalCustomers > 0 ? (generatedCount / totalCustomers) * 100 : 0
+
+  // 締め日前の未発行顧客（警告対象）
+  const beforeBillingDayCustomers = currentMonthOption
+    ? filteredData.filter(
+        (data) =>
+          !data.hasInvoice &&
+          isBeforeBillingDay(currentMonthOption.year, currentMonthOption.month, data.billingDay),
+      )
+    : []
 
   // データ取得関数
   const loadMonthlyData = async (year: number, month: number, customerId?: string) => {
@@ -223,10 +250,36 @@ export function InvoiceCreation({ onInvoiceGenerated }: InvoiceCreationProps) {
   }
 
   const handleBulkGenerate = async () => {
-    const pendingCustomers = filteredData.filter((data) => !data.hasInvoice).map((data) => data.customerId)
+    if (!currentMonthOption) return
 
-    for (const customerId of pendingCustomers) {
-      await handleGenerateInvoice(customerId)
+    const pending = filteredData.filter((data) => !data.hasInvoice)
+    const beforeBilling = pending.filter((data) =>
+      isBeforeBillingDay(currentMonthOption.year, currentMonthOption.month, data.billingDay),
+    )
+    const safeToCreate = pending.filter(
+      (data) =>
+        !isBeforeBillingDay(currentMonthOption.year, currentMonthOption.month, data.billingDay),
+    )
+
+    if (beforeBilling.length > 0) {
+      const beforeNames = beforeBilling.map((d) => d.customerName).join('、')
+      if (safeToCreate.length === 0) {
+        alert(
+          `締め日前の顧客のみのため、一括作成できる対象がありません。\n` +
+            `対象: ${beforeNames}\n` +
+            `個別に作成する場合は各行の請求書作成ボタンを使用してください。`,
+        )
+        return
+      }
+      const proceed = confirm(
+        `締め日前の顧客 ${beforeBilling.length}社 (${beforeNames}) は除外し、\n` +
+          `${safeToCreate.length}社の請求書を作成します。よろしいですか？`,
+      )
+      if (!proceed) return
+    }
+
+    for (const data of safeToCreate) {
+      await handleGenerateInvoice(data.customerId)
     }
   }
 
@@ -410,6 +463,19 @@ export function InvoiceCreation({ onInvoiceGenerated }: InvoiceCreationProps) {
         </CardContent>
       </Card>
 
+      {/* 締め日前警告 */}
+      {!loading && beforeBillingDayCustomers.length > 0 && (
+        <Alert className="border-amber-300 bg-amber-50 text-amber-900">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertDescription>
+            締め日前の顧客が <strong>{beforeBillingDayCustomers.length}社</strong> 含まれています:{' '}
+            {beforeBillingDayCustomers.map((d) => d.customerName).join('、')}
+            <br />
+            今発行すると締め日までの納品が反映されない可能性があります。一括生成では除外されます。
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* 月次集計情報 */}
       {!loading && filteredData.length > 0 && (
         <Card>
@@ -457,6 +523,21 @@ export function InvoiceCreation({ onInvoiceGenerated }: InvoiceCreationProps) {
                           <div className="text-muted-foreground">
                             {data.billingDay}日締め / {getPaymentTermsLabel(data.paymentTerms)}
                           </div>
+                          {currentMonthOption &&
+                            !data.hasInvoice &&
+                            isBeforeBillingDay(
+                              currentMonthOption.year,
+                              currentMonthOption.month,
+                              data.billingDay,
+                            ) && (
+                              <Badge
+                                variant="outline"
+                                className="border-amber-400 bg-amber-50 text-amber-700"
+                              >
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                締め日前
+                              </Badge>
+                            )}
                         </div>
                       </TableCell>
                       <TableCell>{data.deliveryCount}件</TableCell>
