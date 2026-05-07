@@ -1024,7 +1024,8 @@ class GoogleSheetsClient {
 
       console.log(`📊 Creating delivery sheet V2 from template (${this.authType}):`, templateFileId);
 
-      const newFileName = `納品書_${data.delivery_number}_${data.customer_name}_${new Date().toISOString().slice(0, 10)}`;
+      // ファイル名には納品日を使用（作成日ではなく）
+      const newFileName = `納品書_${data.delivery_number}_${data.customer_name}_${data.delivery_date}`;
       let newFileId: string;
 
       // OAuth 2.0認証でテンプレートをコピー
@@ -1109,11 +1110,32 @@ class GoogleSheetsClient {
     // 合計金額は明細下部の合計行（F-I列）にのみ表示する。
     // 上部 A7:B7 への重複書き込みは廃止（顧客視点での二重表示を回避）。
 
+
     // 明細データ（11行目から開始、9列構造）
     // A:日付, B:品名, C:単価, D:数量, E:単位, F:税率, G:税抜金額, H:消費税, I:備考
     const itemsStartRow = 11;
     let totalSubtotal = 0;
     let totalTax = 0;
+
+    // 先に税込み合計を計算（上部の合計金額表示用）
+    data.items.forEach((item) => {
+      const subtotal = item.unit_price * item.quantity;
+      const taxRateNum = parseInt(item.tax_rate.replace('%', ''), 10) / 100;
+      const taxAmount = Math.floor(subtotal * taxRateNum);
+      totalSubtotal += subtotal;
+      totalTax += taxAmount;
+    });
+    const grandTotal = totalSubtotal + totalTax;
+
+    // 合計金額を上部に表示（A7:B7）- 税込み金額
+    updates.push(
+      { range: 'A7', values: [['合計金額']] },
+      { range: 'B7', values: [[`¥${grandTotal.toLocaleString()}`]] }
+    );
+
+    // 明細行を追加（税抜金額・消費税は再計算）
+    totalSubtotal = 0;
+    totalTax = 0;
 
     data.items.forEach((item, index) => {
       const row = itemsStartRow + index;
@@ -1141,8 +1163,8 @@ class GoogleSheetsClient {
     });
 
     // 明細下部に合計行を追加（明細終了行 + 2行）
+    // ※grandTotalは上部で既に計算済み
     const summaryRow = itemsStartRow + data.items.length + 1;
-    const grandTotal = totalSubtotal + totalTax;
     updates.push(
       { range: `F${summaryRow}`, values: [['合計']] },
       { range: `G${summaryRow}`, values: [[totalSubtotal]] },
@@ -1571,23 +1593,39 @@ class GoogleSheetsClient {
     let spreadsheetId: string;
     let isNewSpreadsheet = false;
 
+    let sheetId: number;
+
     if (existingSpreadsheetId) {
-      // 既存のスプレッドシートにタブを追加
+      // 既存のスプレッドシートを使用
       spreadsheetId = existingSpreadsheetId;
-      console.log('📋 Adding tab to existing spreadsheet:', spreadsheetId);
+      console.log('📋 Using existing spreadsheet:', spreadsheetId);
+
+      // 同名のタブが既に存在するか確認
+      const existingSheetId = await this.findSheetIdByName(spreadsheetId, tabName);
+
+      if (existingSheetId !== null) {
+        // 既存タブがある場合は更新のみ
+        console.log(`📋 Tab「${tabName}」already exists (sheetId: ${existingSheetId}), updating...`);
+        sheetId = existingSheetId;
+      } else {
+        // 既存タブがない場合は新規作成
+        console.log(`📋 Tab「${tabName}」not found, creating new tab...`);
+        sheetId = await this.copySheetFromTemplate(templateFileId, spreadsheetId, tabName);
+        console.log('✅ Sheet copied with new tab name:', tabName);
+      }
     } else {
       // 新しいスプレッドシートを作成
       const spreadsheetName = `${year}年${month}月_請求書一覧`;
       spreadsheetId = await this.createMonthlySpreadsheet(spreadsheetName, templateFileId);
       isNewSpreadsheet = true;
       console.log('✅ New monthly spreadsheet created:', spreadsheetId);
+
+      // テンプレートからタブをコピー
+      sheetId = await this.copySheetFromTemplate(templateFileId, spreadsheetId, tabName);
+      console.log('✅ Sheet copied with new tab name:', tabName);
     }
 
-    // テンプレートからタブをコピー
-    const newSheetId = await this.copySheetFromTemplate(templateFileId, spreadsheetId, tabName);
-    console.log('✅ Sheet copied with new tab name:', tabName);
-
-    // コピーしたタブにデータを投入
+    // タブにデータを投入（新規・既存どちらも）
     await this.updateInvoiceSheetV2WithTabName(spreadsheetId, data, tabName);
     console.log('✅ Invoice data updated on tab:', tabName);
 
@@ -1606,7 +1644,7 @@ class GoogleSheetsClient {
     return {
       spreadsheetId,
       spreadsheetUrl,
-      sheetId: newSheetId,
+      sheetId,
       tabName,
       isNewSpreadsheet
     };
@@ -1904,6 +1942,19 @@ class GoogleSheetsClient {
         { range: `'${tabName}'!H${totalStartRow + 2}`, values: [[`¥${data.total_amount?.toLocaleString() || '0'}`]] }
       );
     }
+
+    // 振込先情報（動的位置）- 合計行の後に配置
+    // 明細が多い場合でも振込先が上書きされないよう、集計エリアの後に動的に書き込む
+    const bankInfoStartRow = totalStartRow + 3;
+    updates.push(
+      { range: `'${tabName}'!A${bankInfoStartRow}`, values: [['【お振込先】']] },
+      { range: `'${tabName}'!A${bankInfoStartRow + 1}`, values: [['銀行名: 朝日信用金庫']] },
+      { range: `'${tabName}'!A${bankInfoStartRow + 2}`, values: [['支店名: 三郷支店']] },
+      { range: `'${tabName}'!A${bankInfoStartRow + 3}`, values: [['口座種別: 普通']] },
+      { range: `'${tabName}'!A${bankInfoStartRow + 4}`, values: [['口座番号: 0430910']] },
+      { range: `'${tabName}'!A${bankInfoStartRow + 5}`, values: [['口座名義: カ)ボニカ・アグリジェント']] }
+    );
+    console.log(`📊 Bank info written at row ${bankInfoStartRow}`);
 
     console.log('📊 Batch update ranges:', updates.length, 'ranges');
 
@@ -2291,6 +2342,26 @@ class GoogleSheetsClient {
   }
 
   /**
+   * シート名からシートIDを取得（存在しない場合はnullを返す）
+   */
+  private async findSheetIdByName(spreadsheetId: string, sheetName: string): Promise<number | null> {
+    try {
+      const spreadsheet = await this.sheets.spreadsheets.get({
+        spreadsheetId: spreadsheetId,
+      });
+
+      const sheet = spreadsheet.data.sheets?.find(
+        (s: any) => s.properties?.title === sheetName
+      );
+
+      return sheet?.properties?.sheetId ?? null;
+    } catch (error) {
+      console.warn(`⚠️ Failed to check sheet existence: ${sheetName}`, error);
+      return null;
+    }
+  }
+
+  /**
    * 新しい10列構造の請求書テンプレートにデータを投入
    * レイアウト: 左側=顧客情報、右側=発行元（ボニカ）
    * 列構成: A:日付, B:納品先, C:品名, D:単価, E:数量, F:単位, G:税率, H:税抜金額, I:消費税, J:備考
@@ -2419,6 +2490,19 @@ class GoogleSheetsClient {
         { range: `H${totalStartRow + 2}`, values: [[`¥${data.total_amount?.toLocaleString() || '0'}`]] }
       );
     }
+
+    // 振込先情報（動的位置）- 合計行の後に配置
+    // 明細が多い場合でも振込先が上書きされないよう、集計エリアの後に動的に書き込む
+    const bankInfoStartRow = totalStartRow + 3;
+    updates.push(
+      { range: `A${bankInfoStartRow}`, values: [['【お振込先】']] },
+      { range: `A${bankInfoStartRow + 1}`, values: [['銀行名: 朝日信用金庫']] },
+      { range: `A${bankInfoStartRow + 2}`, values: [['支店名: 三郷支店']] },
+      { range: `A${bankInfoStartRow + 3}`, values: [['口座種別: 普通']] },
+      { range: `A${bankInfoStartRow + 4}`, values: [['口座番号: 0430910']] },
+      { range: `A${bankInfoStartRow + 5}`, values: [['口座名義: カ)ボニカ・アグリジェント']] }
+    );
+    console.log(`📊 Bank info written at row ${bankInfoStartRow}`);
 
     console.log('📊 Batch update ranges V2:', updates.map(u => u.range));
 

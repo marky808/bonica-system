@@ -138,6 +138,7 @@ export async function POST(request: NextRequest) {
       unit: string;
       tax_rate: string;
       is_return: boolean;
+      notes?: string;
     }> = [];
 
     deliveries.forEach(delivery => {
@@ -157,7 +158,8 @@ export async function POST(request: NextRequest) {
           quantity: item.quantity, // 赤伝の場合はマイナス値
           unit: item.unit || item.purchase?.unit || 'kg',
           tax_rate: item.taxRate === 8 ? '8%' : '10%',
-          is_return: isReturn
+          is_return: isReturn,
+          notes: item.notes || delivery.notes || undefined  // アイテム備考がなければ納品備考を使用
         });
       });
     });
@@ -175,19 +177,47 @@ export async function POST(request: NextRequest) {
     // Google Sheetsに渡す形式に変換
     const invoiceItems = items.map(item => ({
       date: item.date,
+      delivery_destination: item.delivery_destination,  // 納品先名
       product_name: item.product_name,
       unit_price: item.unit_price,
       quantity: item.quantity,
       unit: item.unit,
-      tax_rate: item.tax_rate
+      tax_rate: item.tax_rate,
+      notes: item.notes  // 備考（J列）
     }));
+
+    // 税率別集計を計算（Google Sheets書き込み＆データベース保存用）
+    // 赤伝のマイナス数量も含めて計算
+    const items8 = items.filter(item => item.tax_rate === '8%');
+    const items10 = items.filter(item => item.tax_rate === '10%');
+
+    const subtotal8 = items8.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
+    const subtotal10 = items10.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
+
+    // 消費税は切り捨て（明細行の計算と統一）
+    const tax8 = Math.floor(subtotal8 * 0.08);
+    const tax10 = Math.floor(subtotal10 * 0.1);
+
+    const totalTax = tax8 + tax10;
+    const subtotal = subtotal8 + subtotal10;
+    const totalAmount = subtotal + totalTax;
+
+    console.log(`📊 請求金額計算: 小計=${subtotal}, 税8%=${tax8}, 税10%=${tax10}, 合計=${totalAmount}`);
 
     const invoiceDataV2: InvoiceDataV2 = {
       invoice_number: invoiceNumber,
       invoice_date: invoiceDate,
       customer_name: billingCompanyName,
       customer_address: billingAddress,
-      items: invoiceItems
+      items: invoiceItems,
+      // 税率別集計・合計をスプレッドシートに書き込み
+      subtotal_8: subtotal8,
+      tax_8: tax8,
+      subtotal_10: subtotal10,
+      tax_10: tax10,
+      subtotal: subtotal,
+      total_tax: totalTax,
+      total_amount: totalAmount
     };
 
     console.log('📋 Prepared invoice data V2:', invoiceDataV2);
@@ -198,32 +228,19 @@ export async function POST(request: NextRequest) {
     // Google Sheetsに請求書を作成（V2メソッド）
     const result = await googleSheetsClient.createInvoiceSheetV2(invoiceDataV2, templateId);
 
-    // 税率別集計を計算（データベース保存用）
-    // 赤伝のマイナス数量も含めて計算
-    const items8 = items.filter(item => item.tax_rate === '8%');
-    const items10 = items.filter(item => item.tax_rate === '10%');
-
-    const subtotal8 = items8.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
-    const subtotal10 = items10.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
-
-    // 税金もマイナスの場合があるので、Math.floorではなくMath.roundを使用
-    const tax8 = Math.round(subtotal8 * 0.08);
-    const tax10 = Math.round(subtotal10 * 0.1);
-
-    const totalTax = tax8 + tax10;
-    const subtotal = subtotal8 + subtotal10;
-    const totalAmount = subtotal + totalTax;
-
-    console.log(`📊 請求金額計算: 小計=${subtotal}, 税8%=${tax8}, 税10%=${tax10}, 合計=${totalAmount}`);
-
     // 請求書をデータベースに保存
+    // 対象月は納品期間の終了日（endDate）から取得
+    const billingPeriodEnd = new Date(endDate);
+    const billingMonth = billingPeriodEnd.getMonth() + 1;
+    const billingYear = billingPeriodEnd.getFullYear();
+
     const invoice = await prisma.invoice.create({
       data: {
         invoice_number: invoiceNumber,
         customerId: customerId,
         invoiceDate: new Date(),
-        month: new Date().getMonth() + 1,
-        year: new Date().getFullYear(),
+        month: billingMonth,
+        year: billingYear,
         totalAmount: totalAmount,
         status: 'ISSUED',
         googleSheetId: result.sheetId,

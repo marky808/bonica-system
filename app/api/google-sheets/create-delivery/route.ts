@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   let deliveryId: string = '';
-  let templateId: string = '';
+  let templateId: string | undefined = '';
 
   try {
     const body = await request.json();

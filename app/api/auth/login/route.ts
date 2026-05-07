@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import jwt from 'jsonwebtoken'
+import jwt, { SignOptions } from 'jsonwebtoken'
 import { prisma } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -47,14 +47,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const expiresIn = process.env.JWT_EXPIRES_IN || '7d'
     const token = jwt.sign(
-      { 
+      {
         userId: user.id,
         email: user.email,
-        role: user.role 
+        role: user.role
       },
       jwtSecret,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      { expiresIn } as SignOptions
     )
 
     // Return user data (without password) and token

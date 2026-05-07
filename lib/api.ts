@@ -307,6 +307,14 @@ class ApiClient {
 
       if (!response.ok) {
         console.error('❌ API Request failed:', { url, status: response.status, error: data.error })
+        // 409: 確認が必要なケース（仕入れ日変更など）
+        if (response.status === 409 && data.requireConfirmation) {
+          return {
+            error: data.error || 'An error occurred',
+            requireConfirmation: true,
+            deliveryCount: data.deliveryCount
+          }
+        }
         return { error: data.error || 'An error occurred' }
       }
 
@@ -335,8 +343,12 @@ class ApiClient {
     page?: number
     limit?: number
     category?: string
+    categoryId?: string
     supplier?: string
+    supplierId?: string
     month?: string
+    year?: number
+    monthNum?: number
     status?: string
     search?: string
   } = {}): Promise<ApiResponse<PurchasesResponse>> {
@@ -390,7 +402,8 @@ class ApiClient {
     expiryDate?: string
     deliveryFee?: string
     status: string
-  }>): Promise<ApiResponse<Purchase>> {
+    forceUpdate?: boolean
+  }>): Promise<ApiResponse<Purchase> & { requireConfirmation?: boolean; deliveryCount?: number }> {
     return this.request<Purchase>(`/purchases/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -401,6 +414,10 @@ class ApiClient {
     return this.request<{ message: string }>(`/purchases/${id}`, {
       method: 'DELETE',
     })
+  }
+
+  async getPurchaseMonths(): Promise<ApiResponse<{ months: string[] }>> {
+    return this.request<{ months: string[] }>('/purchases/months')
   }
 
   // Category methods
@@ -844,6 +861,53 @@ class ApiClient {
 
     const endpoint = `/reports${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
     return this.request(endpoint)
+  }
+
+  // Delivery CSV export with filters
+  async exportDeliveriesCsv(params: {
+    startDate: string
+    endDate: string
+    customerId?: string
+    categoryId?: string
+  }): Promise<{ blob?: Blob; error?: string }> {
+    // Check localStorage on client side for fresh token
+    if (typeof window !== 'undefined') {
+      const storedToken = localStorage.getItem('auth_token')
+      if (storedToken && storedToken !== this.token) {
+        this.token = storedToken
+      }
+    }
+
+    const searchParams = new URLSearchParams()
+    searchParams.append('startDate', params.startDate)
+    searchParams.append('endDate', params.endDate)
+    if (params.customerId) {
+      searchParams.append('customerId', params.customerId)
+    }
+    if (params.categoryId) {
+      searchParams.append('categoryId', params.categoryId)
+    }
+
+    const url = `${API_BASE_URL}/api/deliveries/export?${searchParams.toString()}`
+
+    const headers: HeadersInit = {}
+    if (this.token) {
+      headers.Authorization = `Bearer ${this.token}`
+    }
+
+    try {
+      const response = await fetch(url, { headers })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        return { error: errorData.error || 'CSVエクスポートに失敗しました' }
+      }
+
+      const blob = await response.blob()
+      return { blob }
+    } catch {
+      return { error: 'CSVエクスポートに失敗しました' }
+    }
   }
 
   async downloadCsv(params: {

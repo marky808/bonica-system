@@ -11,10 +11,14 @@ export async function GET(request: NextRequest) {
     
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '10')
+    const limit = parseInt(searchParams.get('limit') || '100')
     const category = searchParams.get('category')
+    const categoryId = searchParams.get('categoryId')
     const supplier = searchParams.get('supplier')
+    const supplierId = searchParams.get('supplierId')
     const month = searchParams.get('month')
+    const year = searchParams.get('year')
+    const monthNum = searchParams.get('monthNum')
     const status = searchParams.get('status')
     const search = searchParams.get('search')
 
@@ -22,17 +26,31 @@ export async function GET(request: NextRequest) {
 
     // Build where clause
     const where: any = {}
-    
-    if (category) {
+
+    // categoryId を優先、なければ category（名前）でフィルタ
+    if (categoryId) {
+      where.categoryId = categoryId
+    } else if (category) {
       where.category = { name: category }
     }
-    
-    if (supplier) {
+
+    // supplierId を優先、なければ supplier（会社名）でフィルタ
+    if (supplierId) {
+      where.supplierId = supplierId
+    } else if (supplier) {
       where.supplier = { companyName: { contains: supplier } }
     }
-    
+
+    // month (YYYY-MM形式) または year + monthNum でフィルタ
     if (month) {
-      const [year, monthNum] = month.split('-')
+      const [y, m] = month.split('-')
+      const startDate = new Date(parseInt(y), parseInt(m) - 1, 1)
+      const endDate = new Date(parseInt(y), parseInt(m), 0, 23, 59, 59, 999)
+      where.purchaseDate = {
+        gte: startDate,
+        lte: endDate
+      }
+    } else if (year && monthNum) {
       const startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1)
       const endDate = new Date(parseInt(year), parseInt(monthNum), 0, 23, 59, 59, 999)
       where.purchaseDate = {

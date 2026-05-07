@@ -46,6 +46,7 @@ export async function PUT(
     requireAuth(request)
     
     const data = await request.json()
+    const { forceUpdate, ...updateData } = data
     const {
       productName,
       productPrefixId,
@@ -62,11 +63,12 @@ export async function PUT(
       deliveryFee,
       status,
       notes
-    } = data
+    } = updateData
 
-    // Check if purchase exists
+    // Check if purchase exists with delivery items
     const existingPurchase = await prisma.purchase.findUnique({
-      where: { id: params.id }
+      where: { id: params.id },
+      include: { deliveryItems: true }
     })
 
     if (!existingPurchase) {
@@ -74,6 +76,23 @@ export async function PUT(
         { error: '仕入れが見つかりません' },
         { status: 404 }
       )
+    }
+
+    // 納品済みの仕入れの日付変更時は警告（forceフラグで強制変更可能）
+    if (purchaseDate && existingPurchase.deliveryItems.length > 0 && !forceUpdate) {
+      const newDate = new Date(purchaseDate).toISOString().split('T')[0]
+      const existingDate = new Date(existingPurchase.purchaseDate).toISOString().split('T')[0]
+
+      if (newDate !== existingDate) {
+        return NextResponse.json(
+          {
+            error: 'この仕入れは既に納品に使用されています。日付を変更しますか？',
+            requireConfirmation: true,
+            deliveryCount: existingPurchase.deliveryItems.length
+          },
+          { status: 409 }  // Conflict - 確認が必要
+        )
+      }
     }
 
     // Verify category and supplier exist if provided

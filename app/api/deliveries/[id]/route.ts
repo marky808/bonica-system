@@ -99,6 +99,11 @@ export async function PUT(
       if (validatedData.items) {
         // Restore quantities from original items
         for (const originalItem of existingDelivery.items) {
+          // Skip if purchaseId is null (direct input mode)
+          if (!originalItem.purchaseId) {
+            continue
+          }
+
           await tx.purchase.update({
             where: { id: originalItem.purchaseId },
             data: {
@@ -202,20 +207,52 @@ export async function PUT(
         }
 
         // Calculate new total amount
-        const totalAmount = validatedData.items.reduce(
+        const calculatedTotalAmount = validatedData.items.reduce(
           (sum, item) => sum + item.quantity * item.unitPrice,
           0
         )
-        validatedData.totalAmount = totalAmount
+        // Update delivery with calculated total
+        return await tx.delivery.update({
+          where: { id: params.id },
+          data: {
+            ...(validatedData.customerId && { customerId: validatedData.customerId }),
+            ...(validatedData.deliveryDate && { deliveryDate: new Date(validatedData.deliveryDate) }),
+            ...(validatedData.status && { status: validatedData.status }),
+            ...(validatedData.notes !== undefined && { notes: validatedData.notes }),
+            totalAmount: calculatedTotalAmount,
+          },
+          include: {
+            customer: {
+              select: {
+                id: true,
+                companyName: true,
+                contactPerson: true,
+              },
+            },
+            items: {
+              include: {
+                purchase: {
+                  include: {
+                    category: {
+                      select: {
+                        id: true,
+                        name: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        })
       }
 
-      // Update delivery
-      const updateData: any = {}
+      // Update delivery (without items change)
+      const updateData: Record<string, unknown> = {}
       if (validatedData.customerId) updateData.customerId = validatedData.customerId
       if (validatedData.deliveryDate) updateData.deliveryDate = new Date(validatedData.deliveryDate)
       if (validatedData.status) updateData.status = validatedData.status
       if (validatedData.notes !== undefined) updateData.notes = validatedData.notes
-      if (validatedData.totalAmount !== undefined) updateData.totalAmount = validatedData.totalAmount
 
       return await tx.delivery.update({
         where: { id: params.id },

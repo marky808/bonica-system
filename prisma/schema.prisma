@@ -161,38 +161,30 @@ model DeliveryItem {
 }
 
 model Invoice {
-  id                           String                        @id @default(cuid())
-  invoice_number               String                        @unique
-  customerId                   String
-  invoiceDate                  DateTime
-  month                        Int
-  year                         Int
-  totalAmount                  Float
-  status                   String                       @default("ISSUED")
-  freeeInvoiceId           String?
-  googleSheetId            String?
-  googleSheetUrl           String?
-  deliveryIds              String
-  createdAt                DateTime                     @default(now())
-  updatedAt                DateTime                     @updatedAt
-  monthlySpreadsheetId     String?
-  sheetTabName             String?
-  monthlyInvoiceSpreadsheet MonthlyInvoiceSpreadsheet? @relation(fields: [monthlySpreadsheetId], references: [id])
+  id                          String                    @id @default(cuid())
+  invoice_number              String                    @unique
+  customerId                  String
+  invoiceDate                 DateTime
+  month                       Int
+  year                        Int
+  totalAmount                 Float
+  status                      String                    @default("ISSUED")
+  freeeInvoiceId              String?
+  googleSheetId               String?
+  googleSheetUrl              String?
+  deliveryIds                 String
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+  // 月別スプレッドシートへの参照
+  monthlySpreadsheetId        String?
+  monthlyInvoiceSpreadsheet   MonthlyInvoiceSpreadsheet? @relation(fields: [monthlySpreadsheetId], references: [id])
+  // スプレッドシート内のタブ名（例: "12月分_いっとく"）
+  sheetTabName                String?
 
   @@map("invoices")
 }
 
-model GoogleSheetTemplate {
-  id              String   @id @default(cuid())
-  name            String
-  type            String
-  templateSheetId String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@map("google_sheet_templates")
-}
-
+// 月別請求書スプレッドシート管理
 model MonthlyInvoiceSpreadsheet {
   id             String    @id @default(cuid())
   year           Int
@@ -205,4 +197,15 @@ model MonthlyInvoiceSpreadsheet {
 
   @@unique([year, month])
   @@map("monthly_invoice_spreadsheets")
+}
+
+model GoogleSheetTemplate {
+  id              String   @id @default(cuid())
+  name            String
+  type            String
+  templateSheetId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("google_sheet_templates")
 }

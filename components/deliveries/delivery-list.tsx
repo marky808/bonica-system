@@ -121,11 +121,9 @@ export function DeliveryList({
 
   // Google SheetsのPDFリンクを生成
   const generatePdfUrl = (delivery: Delivery) => {
-    if (!delivery.googleSheetId) return null
-
-    // 環境変数からスプレッドシートIDを取得（実際の値は本番環境の設定に依存）
-    const spreadsheetId = "1vaxKYp767uQXg9E6EPDcL4QFwZoqLCpZ7AT32GMhrCY"
-    return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=pdf&gid=${delivery.googleSheetId}`
+    // googleSheetUrlには作成された納品書のURL（https://docs.google.com/spreadsheets/d/{sheetId}）が保存されている
+    if (!delivery.googleSheetUrl) return null
+    return `${delivery.googleSheetUrl}/export?format=pdf`
   }
 
   const getStatusBadge = (status: string) => {

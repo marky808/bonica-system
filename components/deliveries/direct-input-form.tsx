@@ -14,15 +14,16 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Plus, X, Loader2, Edit3, ShoppingCart } from "lucide-react"
 import { apiClient, type Customer, type Category } from "@/lib/api"
 
+// ※ マイナス入力（手数料等）に対応するため、quantity/unitPriceはマイナスも許可
 const directDeliverySchema = z.object({
   customerId: z.string().min(1, "お客様を選択してください"),
   deliveryDate: z.string().min(1, "納品日を選択してください"),
   items: z.array(z.object({
     productName: z.string().min(1, "商品名を入力してください"),
     categoryId: z.string().min(1, "カテゴリーを選択してください"),
-    quantity: z.number().min(0.01, "数量を入力してください"),
+    quantity: z.number().refine(val => val !== 0, "数量を入力してください"),
     unit: z.string().min(1, "単位を入力してください"),
-    unitPrice: z.number().min(0, "単価を入力してください"),
+    unitPrice: z.number(), // マイナス単価（手数料等）を許可
     taxRate: z.number().default(8),
     notes: z.string().optional(),
   })).min(1, "納品商品を1つ以上追加してください"),
@@ -282,7 +283,7 @@ export function DirectInputForm({ onSubmit, onCancel }: DirectInputFormProps) {
                                 type="number"
                                 step="0.01"
                                 placeholder="数量"
-                                value={field.value > 0 ? field.value : ""}
+                                value={field.value !== 0 ? field.value : ""}
                                 onChange={(e) => {
                                   const value = parseFloat(e.target.value)
                                   field.onChange(isNaN(value) ? 0 : value)
@@ -323,8 +324,8 @@ export function DirectInputForm({ onSubmit, onCancel }: DirectInputFormProps) {
                               <Input
                                 type="number"
                                 step="1"
-                                placeholder="単価"
-                                value={field.value > 0 ? field.value : ""}
+                                placeholder="単価（手数料はマイナス）"
+                                value={field.value !== 0 ? field.value : ""}
                                 onChange={(e) => {
                                   const value = parseFloat(e.target.value)
                                   field.onChange(isNaN(value) ? 0 : value)
@@ -379,9 +380,9 @@ export function DirectInputForm({ onSubmit, onCancel }: DirectInputFormProps) {
                       )}
                     />
 
-                    {form.watch(`items.${index}.quantity`) > 0 && form.watch(`items.${index}.unitPrice`) > 0 && (
+                    {form.watch(`items.${index}.quantity`) !== 0 && form.watch(`items.${index}.unitPrice`) !== 0 && (
                       <div className="text-right">
-                        <span className="text-lg font-bold text-primary">
+                        <span className={`text-lg font-bold ${form.watch(`items.${index}.quantity`) * form.watch(`items.${index}.unitPrice`) < 0 ? 'text-red-600' : 'text-primary'}`}>
                           小計: {formatCurrency(form.watch(`items.${index}.quantity`) * form.watch(`items.${index}.unitPrice`))}
                         </span>
                       </div>

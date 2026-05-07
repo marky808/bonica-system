@@ -6,21 +6,23 @@ import { verifyToken } from '@/lib/auth'
 export const dynamic = 'force-dynamic'
 
 // 通常モード用スキーマ（既存）
+// ※ マイナス仕入れ（手数料等）に対応するため、quantity/unitPriceはマイナスも許可
 const normalModeItemSchema = z.object({
   purchaseId: z.string().min(1, '仕入れ商品を選択してください'),
-  quantity: z.number().min(0.01, '数量を入力してください'),
-  unitPrice: z.number().min(0, '単価を入力してください'),
+  quantity: z.number().refine(val => val !== 0, '数量を入力してください'),
+  unitPrice: z.number(), // マイナス単価（手数料等）を許可
   deliveryDate: z.string().optional(),
   unit: z.string().optional(),
   taxRate: z.number().default(8),
 })
 
 // 直接入力モード用スキーマ（新規）
+// ※ マイナス入力（手数料等）に対応
 const directModeItemSchema = z.object({
   productName: z.string().min(1, '商品名を入力してください'),
   categoryId: z.string().min(1, 'カテゴリーを選択してください'),
-  quantity: z.number().min(0.01, '数量を入力してください'),
-  unitPrice: z.number().min(0, '単価を入力してください'),
+  quantity: z.number().refine(val => val !== 0, '数量を入力してください'),
+  unitPrice: z.number(), // マイナス単価（手数料等）を許可
   unit: z.string().min(1, '単位を入力してください'),
   taxRate: z.number().default(8),
   notes: z.string().optional(),
@@ -35,12 +37,13 @@ const createDeliverySchema = z.object({
   originalDeliveryId: z.string().optional(), // 赤伝の場合、元の納品ID
   returnReason: z.string().optional(), // 返品理由
   // ============================
+  // ※ マイナス仕入れ（手数料等）に対応するため、quantity/unitPriceはマイナスも許可
   items: z.array(z.object({
     purchaseId: z.string().optional(),
     productName: z.string().optional(),
     categoryId: z.string().optional(),
-    quantity: z.number().min(0.01, '数量を入力してください'),
-    unitPrice: z.number().min(0, '単価を入力してください'),
+    quantity: z.number().refine(val => val !== 0, '数量を入力してください'),
+    unitPrice: z.number(), // マイナス単価（手数料等）を許可
     deliveryDate: z.string().optional(),
     unit: z.string().optional(),
     taxRate: z.number().default(8),
@@ -52,7 +55,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '20')
+    const limit = parseInt(searchParams.get('limit') || '500')  // デフォルトを500件に増加
     const customer = searchParams.get('customer') || ''
     const month = searchParams.get('month') || ''
     const status = searchParams.get('status') || ''
@@ -219,11 +222,16 @@ export async function POST(request: Request) {
       }
 
       // 通常モードの場合のみ在庫チェック（赤伝の場合はスキップ）
+      // ※ マイナス数量（手数料等）の場合も在庫チェックをスキップ
       if (!isDirectMode && !isReturn) {
         for (const item of validatedData.items) {
           if (!item.purchaseId) {
             throw new Error('通常モードでは仕入れ商品を選択してください')
           }
+
+          // マイナス数量（手数料等）の場合は在庫チェック不要
+          if (item.quantity < 0) continue
+
           const purchase = await tx.purchase.findUnique({
             where: { id: item.purchaseId },
             select: { remainingQuantity: true, productName: true },
@@ -331,13 +339,14 @@ export async function POST(request: Request) {
         })
       } else {
         // 通常モード: 既存の処理
+        // ※ 明細ごとの納品日は廃止し、ヘッダーの納品日を統一使用
         const deliveryItemsData = validatedData.items.map(item => ({
           deliveryId: delivery.id,
           purchaseId: item.purchaseId!,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           amount: item.quantity * item.unitPrice,
-          deliveryDate: item.deliveryDate ? new Date(item.deliveryDate) : null,
+          deliveryDate: new Date(validatedData.deliveryDate), // ヘッダーの納品日を使用
           unit: item.unit || null,
           taxRate: item.taxRate || 8,
         }))

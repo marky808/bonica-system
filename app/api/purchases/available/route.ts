@@ -51,6 +51,12 @@ export async function GET(request: Request) {
             companyName: true,
           },
         },
+        productPrefix: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
       orderBy: [
         {

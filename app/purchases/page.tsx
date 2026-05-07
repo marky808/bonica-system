@@ -29,20 +29,30 @@ export default function PurchasesPage() {
     }
   }, [isAuthenticated, isLoading, router])
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: any, forceUpdate = false) => {
     setLoading(true)
     setError('')
-    
+
     try {
       if (editingPurchase) {
         // Update existing purchase
-        const response = await apiClient.updatePurchase(editingPurchase.id, data)
+        const response = await apiClient.updatePurchase(editingPurchase.id, { ...data, forceUpdate })
         if (response.data) {
-          setPurchases(purchases.map(p => 
+          setPurchases(purchases.map(p =>
             p.id === editingPurchase.id ? response.data! : p
           ))
           setShowForm(false)
           setEditingPurchase(null)
+        } else if ((response as any).requireConfirmation) {
+          // 納品に使用されている仕入れの日付変更確認
+          const deliveryCount = (response as any).deliveryCount || 0
+          if (confirm(`この仕入れは ${deliveryCount} 件の納品で使用されています。\n日付を変更してもよろしいですか？`)) {
+            // 強制更新で再試行（forceUpdate を data に含めて明示的に渡す）
+            await handleSubmit({ ...data, forceUpdate: true }, true)
+            return
+          } else {
+            setError('')
+          }
         } else {
           setError(response.error || '更新に失敗しました')
         }

@@ -14,14 +14,16 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Plus, X, Loader2, Search, Package, ShoppingCart } from "lucide-react"
 import { apiClient, type Customer, type Purchase, type Delivery } from "@/lib/api"
 
+// ※ マイナス仕入れ（手数料等）に対応するため、quantity/unitPriceはマイナスも許可
+// ※ 明細ごとの納品日は廃止し、ヘッダーの納品日を使用する
 const deliverySchema = z.object({
   customerId: z.string().min(1, "お客様を選択してください"),
   deliveryDate: z.string().min(1, "納品日を選択してください"),
   items: z.array(z.object({
     purchaseId: z.string().min(1, "商品を選択してください"),
-    quantity: z.number().min(0.01, "数量を入力してください"),
-    unitPrice: z.number().min(0, "単価を入力してください"),
-    deliveryDate: z.string().optional(),
+    quantity: z.number().refine(val => val !== 0, "数量を入力してください"),
+    unitPrice: z.number(), // マイナス単価（手数料等）を許可
+    // deliveryDate: 廃止 - ヘッダーの納品日を使用
     unit: z.string().optional(),
     taxRate: z.number().default(8),
   })).min(1, "納品商品を1つ以上選択してください"),
@@ -58,13 +60,11 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
       deliveryDate: initialData?.deliveryDate
         ? new Date(initialData.deliveryDate).toISOString().split("T")[0]
         : new Date().toISOString().split("T")[0],
+      // 明細ごとの納品日は廃止 - ヘッダーの納品日を使用
       items: initialData?.items?.map(item => ({
         purchaseId: item.purchaseId,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
-        deliveryDate: item.deliveryDate
-          ? new Date(item.deliveryDate).toISOString().split("T")[0]
-          : "",
         unit: item.unit || "",
         taxRate: item.taxRate || 8,
       })) || [],
@@ -165,8 +165,12 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
     }
 
     // 在庫チェック（編集時は元の数量を考慮）
+    // ※ マイナス数量（手数料等）の場合は在庫チェックをスキップ
     const stockErrors = []
     for (const [index, item] of data.items.entries()) {
+      // マイナス数量の場合は在庫チェック不要
+      if (item.quantity < 0) continue
+
       const purchase = getPurchaseInfo(item.purchaseId)
       if (purchase) {
         // 利用可能な在庫 = 現在の残数量 + 元の納品で使っていた数量
@@ -378,12 +382,12 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                               const currentItems = form.getValues('items')
                               const emptySlotIndex = currentItems.findIndex(item => !item.purchaseId)
                               
+                              // 明細ごとの納品日は廃止 - ヘッダーの納品日を使用
                               const newItemData = {
                                 purchaseId: purchase.id,
                                 quantity: 0,
                                 unitPrice: purchase.unitPrice || (purchase.price && purchase.quantity ? purchase.price / purchase.quantity : 0),
                                 taxRate: 8,
-                                deliveryDate: "",
                                 unit: purchase.unit || ""
                               }
 
@@ -525,7 +529,7 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                                   step="0.01"
                                   max={maxQuantity}
                                   placeholder="数量を入力"
-                                  value={field.value > 0 ? field.value : ""}
+                                  value={field.value !== 0 ? field.value : ""}
                                   onChange={(e) => {
                                     const value = e.target.value
                                     if (value === "") {
@@ -533,8 +537,8 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                                     } else {
                                       const numValue = Number.parseFloat(value)
                                       if (!isNaN(numValue)) {
-                                        // 在庫数を超えていないかチェック
-                                        if (numValue > maxQuantity) {
+                                        // マイナス値（手数料等）の場合は在庫チェックをスキップ
+                                        if (numValue > 0 && numValue > maxQuantity) {
                                           setError(`在庫数を超えています。最大 ${maxQuantity} ${purchase?.unit || '個'} まで入力可能です。`)
                                         } else {
                                           setError('')
@@ -568,7 +572,7 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                                 type="number"
                                 step="1"
                                 placeholder="単価を入力"
-                                value={field.value > 0 ? field.value : ""}
+                                value={field.value !== 0 ? field.value : ""}
                                 onChange={(e) => {
                                   const value = e.target.value
                                   if (value === "") {
@@ -594,25 +598,8 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.deliveryDate`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>納品日</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="date"
-                                {...field}
-                                className="h-12"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
+                    {/* 明細ごとの納品日は廃止 - ヘッダーの納品日を使用 */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name={`items.${index}.unit`}
@@ -654,9 +641,9 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                       />
                     </div>
 
-                    {form.watch(`items.${index}.purchaseId`) && form.watch(`items.${index}.quantity`) && (
+                    {form.watch(`items.${index}.purchaseId`) && form.watch(`items.${index}.quantity`) !== 0 && (
                       <div className="text-right">
-                        <span className="text-lg font-bold text-primary">
+                        <span className={`text-lg font-bold ${form.watch(`items.${index}.quantity`) * form.watch(`items.${index}.unitPrice`) < 0 ? 'text-red-600' : 'text-primary'}`}>
                           小計: {formatCurrency(form.watch(`items.${index}.quantity`) * form.watch(`items.${index}.unitPrice`))}
                         </span>
                       </div>
@@ -672,7 +659,7 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
                       purchaseId: "",
                       quantity: 0,
                       unitPrice: 0,
-                      deliveryDate: form.getValues("deliveryDate"),
+                      // 明細ごとの納品日は廃止 - ヘッダーの納品日を使用
                       unit: "",
                       taxRate: 8
                     })}

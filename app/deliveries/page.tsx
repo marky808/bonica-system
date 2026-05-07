@@ -77,16 +77,36 @@ export default function DeliveriesPage() {
   const handleSubmit = async (data: any) => {
     setLoading(true)
     setError('')
-    
+
     try {
       if (editingDelivery) {
         // Update existing delivery
+        const hadGoogleSheet = !!editingDelivery.googleSheetId
         const response = await apiClient.updateDelivery(editingDelivery.id, data)
         if (response.data) {
-          setDeliveries(deliveries.map(d => 
+          setDeliveries(deliveries.map(d =>
             d.id === editingDelivery.id ? response.data! : d
           ))
           setShowForm(false)
+
+          // 納品書が作成済みの場合、再作成を確認
+          if (hadGoogleSheet) {
+            const confirmRegenerate = window.confirm(
+              '納品内容を更新しました。\n\n' +
+              '既存のGoogle Sheets納品書は古い情報のままです。\n' +
+              '納品書を再作成しますか？\n\n' +
+              '※再作成すると新しいスプレッドシートが作成されます。\n' +
+              '※古い納品書は履歴として残ります。'
+            )
+
+            if (confirmRegenerate) {
+              setEditingDelivery(null)
+              // 納品書を再作成
+              await handleCreateGoogleSheetsDelivery(editingDelivery.id)
+              return
+            }
+          }
+
           setEditingDelivery(null)
         } else {
           setError(response.error || '更新に失敗しました')
@@ -313,7 +333,7 @@ export default function DeliveriesPage() {
     try {
       console.log('✅ Using automatic template detection (templateId will be fetched from database)');
 
-      const response = await fetch('/api/google-sheets/create-delivery', {
+      const response = await fetch('/api/google-sheets/create-delivery-v2', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -258,25 +258,33 @@ async function getSupplierReport(startDate: Date, endDate: Date) {
   })
 }
 
+interface MonthlyDataItem {
+  month: string
+  purchase: number
+  delivery: number
+  profit: number
+  profitRate: number
+}
+
 async function getProfitReport(startDate: Date, endDate: Date) {
   console.log('💰 収益分析レポート生成中...')
-  
+
   // 月別データを再利用
   const monthlyResponse = await getMonthlyReport(startDate, endDate)
-  const monthlyData = JSON.parse(await monthlyResponse.text()).data.monthlyData
-  
+  const monthlyData: MonthlyDataItem[] = JSON.parse(await monthlyResponse.text()).data.monthlyData
+
   const profitAnalysis = {
-    monthlyProfitRates: monthlyData.map(item => ({
+    monthlyProfitRates: monthlyData.map((item: MonthlyDataItem) => ({
       month: item.month,
       profitRate: item.profitRate
     })),
-    avgProfitRate: monthlyData.reduce((sum, item) => sum + item.profitRate, 0) / monthlyData.length,
-    avgMonthlySales: monthlyData.reduce((sum, item) => sum + item.delivery, 0) / monthlyData.length,
-    avgMonthlyProfit: monthlyData.reduce((sum, item) => sum + item.profit, 0) / monthlyData.length,
-    maxMonthlySales: Math.max(...monthlyData.map(item => item.delivery)),
-    minMonthlySales: Math.min(...monthlyData.map(item => item.delivery)),
-    maxMonthlyProfit: Math.max(...monthlyData.map(item => item.profit)),
-    minMonthlyProfit: Math.min(...monthlyData.map(item => item.profit))
+    avgProfitRate: monthlyData.reduce((sum: number, item: MonthlyDataItem) => sum + item.profitRate, 0) / monthlyData.length,
+    avgMonthlySales: monthlyData.reduce((sum: number, item: MonthlyDataItem) => sum + item.delivery, 0) / monthlyData.length,
+    avgMonthlyProfit: monthlyData.reduce((sum: number, item: MonthlyDataItem) => sum + item.profit, 0) / monthlyData.length,
+    maxMonthlySales: Math.max(...monthlyData.map((item: MonthlyDataItem) => item.delivery)),
+    minMonthlySales: Math.min(...monthlyData.map((item: MonthlyDataItem) => item.delivery)),
+    maxMonthlyProfit: Math.max(...monthlyData.map((item: MonthlyDataItem) => item.profit)),
+    minMonthlyProfit: Math.min(...monthlyData.map((item: MonthlyDataItem) => item.profit))
   }
   
   console.log('💰 収益分析レポート完了')
