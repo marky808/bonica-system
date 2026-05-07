@@ -1162,16 +1162,12 @@ class GoogleSheetsClient {
       );
     });
 
-    // 明細下部に合計行を追加（明細終了行 + 2行）
-    // ※grandTotalは上部で既に計算済み
-    const summaryRow = itemsStartRow + data.items.length + 1;
-    updates.push(
-      { range: `F${summaryRow}`, values: [['合計']] },
-      { range: `G${summaryRow}`, values: [[totalSubtotal]] },
-      { range: `H${summaryRow}`, values: [[totalTax]] },
-      { range: `I${summaryRow}`, values: [[`¥${grandTotal.toLocaleString()}`]] }
-    );
-    console.log(`📊 Delivery summary row at ${summaryRow}: subtotal=${totalSubtotal}, tax=${totalTax}, total=${grandTotal}`);
+    // 明細下部の合計行（F-I）への書き込みは廃止。
+    // テンプレート側の集計ブロック（行52-59: SUMIF/SUM 数式）が同じ合計を算出するため、
+    // ここで G${summaryRow}/H${summaryRow} に書くと =SUM(G11:G50)/=SUM(H11:H50) が
+    // 明細値とAPI合計値を二重カウントしてしまう（小計が2倍になる既知バグの修正）。
+    // 顧客向けの目立つ総額表示は上部 A7:B7、内訳はテンプレート集計ブロックが担う。
+    console.log(`📊 Delivery totals (computed by template formulas): subtotal=${totalSubtotal}, tax=${totalTax}, total=${grandTotal}`);
 
     console.log('📊 Batch update ranges V2:', updates.map(u => u.range));
 
@@ -1225,43 +1221,9 @@ class GoogleSheetsClient {
       }
     });
 
-    // 書式設定（明細下部の合計行 + 明細行枠線・アラインメント）
+    // 書式設定（明細行枠線・アラインメント）
     try {
       const formatRequests = [
-        // 明細下部の合計行（F-I列）のフォーマット
-        {
-          repeatCell: {
-            range: {
-              sheetId: firstSheetId,
-              startRowIndex: summaryRow - 1,  // 0-indexed
-              endRowIndex: summaryRow,
-              startColumnIndex: 5,  // F列
-              endColumnIndex: 9     // I列まで
-            },
-            cell: {
-              userEnteredFormat: {
-                textFormat: {
-                  bold: true
-                },
-                backgroundColor: { red: 0.95, green: 0.95, blue: 0.95 }
-              }
-            },
-            fields: 'userEnteredFormat(textFormat,backgroundColor)'
-          }
-        },
-        // 明細下部の合計行に上枠線を追加
-        {
-          updateBorders: {
-            range: {
-              sheetId: firstSheetId,
-              startRowIndex: summaryRow - 1,
-              endRowIndex: summaryRow,
-              startColumnIndex: 5,  // F列
-              endColumnIndex: 9     // I列
-            },
-            top: { style: 'SOLID', width: 2, color: { red: 0, green: 0, blue: 0 } }
-          }
-        },
         // ========================================
         // 明細行（11行目〜）に枠線を適用
         // テンプレートの枠線範囲外の明細行にも枠線を付ける
