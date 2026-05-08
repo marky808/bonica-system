@@ -1838,10 +1838,11 @@ class GoogleSheetsClient {
       { range: `'${tabName}'!D4`, values: [[`請求書番号: ${data.invoice_number}`]] }
     );
 
-    // 合計金額を上部に表示（C7:D7）- 税込み金額
+    // ご請求金額を上部に表示（C7:D7）- 税込み合計
+    // C7はラベル文字列、D7は数値で書き込み（テンプレートの "¥"#,##0 書式で表示）
     updates.push(
-      { range: `'${tabName}'!C7`, values: [['合計金額']] },
-      { range: `'${tabName}'!D7`, values: [[`¥${data.total_amount?.toLocaleString() || '0'}`]] }
+      { range: `'${tabName}'!C7`, values: [['ご請求金額']] },
+      { range: `'${tabName}'!D7`, values: [[data.total_amount ?? 0]] }
     );
 
     // 明細データ（11行目から開始、10列構造）
@@ -2398,10 +2399,11 @@ class GoogleSheetsClient {
       { range: 'D4', values: [[`請求書番号: ${data.invoice_number}`]] }
     );
 
-    // 合計金額を上部に表示（C7:D7）- 税込み金額
+    // ご請求金額を上部に表示（C7:D7）- 税込み合計
+    // C7はラベル文字列、D7は数値で書き込み（テンプレートの "¥"#,##0 書式で表示）
     updates.push(
-      { range: 'C7', values: [['合計金額']] },
-      { range: 'D7', values: [[`¥${data.total_amount?.toLocaleString() || '0'}`]] }
+      { range: 'C7', values: [['ご請求金額']] },
+      { range: 'D7', values: [[data.total_amount ?? 0]] }
     );
 
     // 明細データ（11行目から開始、10列構造）
