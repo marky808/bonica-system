@@ -1838,8 +1838,11 @@ class GoogleSheetsClient {
       { range: `'${tabName}'!D4`, values: [[`請求書番号: ${data.invoice_number}`]] }
     );
 
-    // 合計金額は明細下部の合計行（G/H列）にのみ表示する。
-    // 上部 C7:D7 への重複書き込みは廃止（納品書と同様、顧客視点での二重表示を回避）。
+    // 合計金額を上部に表示（C7:D7）- 税込み金額
+    updates.push(
+      { range: `'${tabName}'!C7`, values: [['合計金額']] },
+      { range: `'${tabName}'!D7`, values: [[`¥${data.total_amount?.toLocaleString() || '0'}`]] }
+    );
 
     // 明細データ（11行目から開始、10列構造）
     // H列（税抜金額）とI列（消費税）も計算して書き込む（テンプレート数式に依存しない）
@@ -2393,6 +2396,12 @@ class GoogleSheetsClient {
       { range: 'A3', values: [[data.customer_address || '']] },
       { range: 'A4', values: [[`請求日: ${data.invoice_date}`]] },
       { range: 'D4', values: [[`請求書番号: ${data.invoice_number}`]] }
+    );
+
+    // 合計金額を上部に表示（C7:D7）- 税込み金額
+    updates.push(
+      { range: 'C7', values: [['合計金額']] },
+      { range: 'D7', values: [[`¥${data.total_amount?.toLocaleString() || '0'}`]] }
     );
 
     // 明細データ（11行目から開始、10列構造）
