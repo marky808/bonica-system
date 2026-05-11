@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Progress } from "@/components/ui/progress"
-import { FileText, Download, CheckCircle, Clock, AlertCircle, Loader2 } from "lucide-react"
+import { FileText, Download, CheckCircle, Clock, AlertCircle, Loader2, RotateCw } from "lucide-react"
 import { apiClient, type Customer } from "@/lib/api"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAuth } from "@/lib/auth-context"
@@ -73,6 +73,7 @@ export function InvoiceCreation({ onInvoiceGenerated }: InvoiceCreationProps) {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState("all")
   const [generatingInvoices, setGeneratingInvoices] = useState<Set<string>>(new Set())
+  const [reissuingInvoices, setReissuingInvoices] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -244,6 +245,72 @@ export function InvoiceCreation({ onInvoiceGenerated }: InvoiceCreationProps) {
       setGeneratingInvoices((prev) => {
         const newSet = new Set(prev)
         newSet.delete(customerId)
+        return newSet
+      })
+    }
+  }
+
+  const handleReissueInvoice = async (data: MonthlyDeliveryData) => {
+    if (!currentMonthOption || !data.invoiceId) return
+
+    const confirmed = window.confirm(
+      `${data.customerName}の${currentMonthOption.label}分 請求書を再発行します。\n\n` +
+      `■ 実行内容\n` +
+      `・既存の請求書レコードを削除します\n` +
+      `・紐付く納品 ${data.deliveryCount}件 を「請求済み」から「納品済み」に戻します\n` +
+      `・新しいGoogle Sheetsスプレッドシート（タブ）を作成します\n\n` +
+      `■ 注意\n` +
+      `・古いGoogle Sheetsのタブは履歴として残ります（必要なら手動で削除してください）\n\n` +
+      `続行しますか？`
+    )
+
+    if (!confirmed) return
+
+    setReissuingInvoices((prev) => new Set([...prev, data.customerId]))
+    setError('')
+    setSuccess('')
+
+    try {
+      const resetResponse = await apiClient.request(`/invoices/${data.invoiceId}/reset`, {
+        method: 'POST',
+      })
+
+      if (resetResponse.error) {
+        setError(`請求書のリセットに失敗しました: ${resetResponse.error}`)
+        return
+      }
+
+      const createResponse = await apiClient.request('/invoices/monthly', {
+        method: 'POST',
+        body: JSON.stringify({
+          customerId: data.customerId,
+          year: currentMonthOption.year,
+          month: currentMonthOption.month,
+        }),
+      })
+
+      if (createResponse.data) {
+        alert(
+          `${data.customerName}の請求書を再発行しました\n` +
+          `請求書ID: ${createResponse.data.invoiceId}\n` +
+          `合計金額: ${formatCurrency(createResponse.data.totalAmount)}\n\n` +
+          `※古いGoogle Sheetsのタブは履歴として残っています。必要なら手動で削除してください。`
+        )
+        await loadMonthlyData(currentMonthOption.year, currentMonthOption.month, selectedCustomer)
+        onInvoiceGenerated?.(data.customerId, currentMonthOption.year, currentMonthOption.month)
+      } else {
+        setError(
+          `リセットは成功しましたが、再作成に失敗しました: ${createResponse.error}\n` +
+          `「請求書作成」ボタンから再度作成してください。`
+        )
+        await loadMonthlyData(currentMonthOption.year, currentMonthOption.month, selectedCustomer)
+      }
+    } catch (err) {
+      setError('再発行中に通信エラーが発生しました')
+    } finally {
+      setReissuingInvoices((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(data.customerId)
         return newSet
       })
     }
@@ -557,9 +624,23 @@ export function InvoiceCreation({ onInvoiceGenerated }: InvoiceCreationProps) {
                       </TableCell>
                       <TableCell>
                         {data.hasInvoice ? (
-                          <Button variant="outline" size="sm" disabled>
-                            <Download className="h-4 w-4 mr-2" />
-                            作成済み
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleReissueInvoice(data)}
+                            disabled={reissuingInvoices.has(data.customerId)}
+                          >
+                            {reissuingInvoices.has(data.customerId) ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                再発行中...
+                              </>
+                            ) : (
+                              <>
+                                <RotateCw className="h-4 w-4 mr-2" />
+                                再発行
+                              </>
+                            )}
                           </Button>
                         ) : (
                           <Button

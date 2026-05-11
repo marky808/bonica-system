@@ -1937,6 +1937,67 @@ class GoogleSheetsClient {
     if (data.total_amount !== undefined) {
       const formatRequests = [
         // ========================================
+        // ご請求金額（C7:D7）を目立たせる書式
+        // 太字・大きめフォント・通貨フォーマット・太枠線
+        // ========================================
+        // C7（ラベル）: 太字・大フォント・右寄せ・縦中央
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 6,   // 7行目（0-indexed）
+              endRowIndex: 7,
+              startColumnIndex: 2, // C列
+              endColumnIndex: 3
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: { bold: true, fontSize: 16 },
+                horizontalAlignment: 'RIGHT',
+                verticalAlignment: 'MIDDLE'
+              }
+            },
+            fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+          }
+        },
+        // D7（金額）: 太字・大フォント・通貨フォーマット・右寄せ・縦中央
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 6,
+              endRowIndex: 7,
+              startColumnIndex: 3, // D列
+              endColumnIndex: 4
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: { bold: true, fontSize: 16 },
+                horizontalAlignment: 'RIGHT',
+                verticalAlignment: 'MIDDLE',
+                numberFormat: { type: 'CURRENCY', pattern: '¥#,##0' }
+              }
+            },
+            fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment,numberFormat)'
+          }
+        },
+        // C7:D7 を囲む太枠線
+        {
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 6,
+              endRowIndex: 7,
+              startColumnIndex: 2,
+              endColumnIndex: 4
+            },
+            top:    { style: 'SOLID_THICK', color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID_THICK', color: { red: 0, green: 0, blue: 0 } },
+            left:   { style: 'SOLID_THICK', color: { red: 0, green: 0, blue: 0 } },
+            right:  { style: 'SOLID_THICK', color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
+        // ========================================
         // 1. 旧テンプレートの固定集計エリア（52-60行目）の書式をクリア
         // テンプレートのボールド等の書式が残る問題を解決
         // ========================================
@@ -2497,6 +2558,67 @@ class GoogleSheetsClient {
       const sheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId || 0;
 
       const borderRequests = [
+        // ========================================
+        // ご請求金額（C7:D7）を目立たせる書式
+        // 太字・大きめフォント・通貨フォーマット・太枠線
+        // ========================================
+        // C7（ラベル）: 太字・大フォント・右寄せ・縦中央
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 6,   // 7行目（0-indexed）
+              endRowIndex: 7,
+              startColumnIndex: 2, // C列
+              endColumnIndex: 3
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: { bold: true, fontSize: 16 },
+                horizontalAlignment: 'RIGHT',
+                verticalAlignment: 'MIDDLE'
+              }
+            },
+            fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+          }
+        },
+        // D7（金額）: 太字・大フォント・通貨フォーマット・右寄せ・縦中央
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 6,
+              endRowIndex: 7,
+              startColumnIndex: 3, // D列
+              endColumnIndex: 4
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: { bold: true, fontSize: 16 },
+                horizontalAlignment: 'RIGHT',
+                verticalAlignment: 'MIDDLE',
+                numberFormat: { type: 'CURRENCY', pattern: '¥#,##0' }
+              }
+            },
+            fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment,numberFormat)'
+          }
+        },
+        // C7:D7 を囲む太枠線
+        {
+          updateBorders: {
+            range: {
+              sheetId: sheetId,
+              startRowIndex: 6,
+              endRowIndex: 7,
+              startColumnIndex: 2,
+              endColumnIndex: 4
+            },
+            top:    { style: 'SOLID_THICK', color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID_THICK', color: { red: 0, green: 0, blue: 0 } },
+            left:   { style: 'SOLID_THICK', color: { red: 0, green: 0, blue: 0 } },
+            right:  { style: 'SOLID_THICK', color: { red: 0, green: 0, blue: 0 } }
+          }
+        },
         // ========================================
         // 1. 旧テンプレートの固定集計エリア（52-60行目）の書式をクリア
         // テンプレートのボールド等の書式が残る問題を解決
