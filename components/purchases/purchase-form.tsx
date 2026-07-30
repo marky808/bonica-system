@@ -55,6 +55,11 @@ interface PurchaseFormProps {
 }
 
 export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormProps) {
+  const usedQuantity =
+    initialData?.quantity !== undefined && initialData?.remainingQuantity !== undefined
+      ? initialData.quantity - initialData.remainingQuantity
+      : undefined
+
   const [productSuggestionsVisible, setProductSuggestionsVisible] = useState(false)
   const [unitSuggestionsVisible, setUnitSuggestionsVisible] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
@@ -302,6 +307,12 @@ export function PurchaseForm({ onSubmit, onCancel, initialData }: PurchaseFormPr
                         className="h-12"
                       />
                     </FormControl>
+                    {usedQuantity !== undefined && usedQuantity > 0 && (
+                      <FormDescription>
+                        納品済み: {usedQuantity} {initialData?.unit}
+                        （これを下回る数量には変更できません）
+                      </FormDescription>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

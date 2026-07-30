@@ -61,7 +61,6 @@ export async function PUT(
       purchaseDate,
       expiryDate,
       deliveryFee,
-      status,
       notes
     } = updateData
 
@@ -116,13 +115,37 @@ export async function PUT(
       }
     }
 
+    // 納品済み数量（既存quantity − 既存remainingQuantity）を下回る数量には変更できない
+    const usedQuantity = existingPurchase.quantity - existingPurchase.remainingQuantity
+    if (quantity !== undefined && quantity !== null && quantity !== '') {
+      const newQuantity = parseFloat(quantity)
+      if (isNaN(newQuantity)) {
+        return NextResponse.json(
+          { error: '数量には数値を入力してください' },
+          { status: 400 }
+        )
+      }
+      if (newQuantity < usedQuantity - 0.001) {
+        return NextResponse.json(
+          {
+            error: `既に ${usedQuantity}${existingPurchase.unit} 納品済みのため、数量を ${newQuantity}${existingPurchase.unit} には変更できません（納品済み数量を下回る値には設定できません）`
+          },
+          { status: 400 }
+        )
+      }
+    }
+
     // Calculate remaining quantity if quantity changes
     let remainingQuantity = existingPurchase.remainingQuantity
     if (quantity && parseFloat(quantity) !== existingPurchase.quantity) {
-      const usedQuantity = existingPurchase.quantity - existingPurchase.remainingQuantity
       remainingQuantity = parseFloat(quantity) - usedQuantity
       remainingQuantity = Math.max(0, remainingQuantity) // Can't be negative
     }
+
+    // ステータスは常にremainingQuantityから自動算出する（納品作成時と同じ基準）
+    const finalQuantity = quantity ? parseFloat(quantity) : existingPurchase.quantity
+    const calculatedStatus =
+      remainingQuantity <= 0 ? 'USED' : remainingQuantity < finalQuantity ? 'PARTIAL' : 'UNUSED'
 
     // Handle productPrefixId: convert empty string to null
     const resolvedProductPrefixId = productPrefixId === '' ? null : productPrefixId
@@ -143,7 +166,7 @@ export async function PUT(
         ...(purchaseDate && { purchaseDate: new Date(purchaseDate) }),
         ...(expiryDate !== undefined && { expiryDate: expiryDate ? new Date(expiryDate) : null }),
         ...(deliveryFee !== undefined && { deliveryFee }),
-        ...(status && { status }),
+        status: calculatedStatus,
         ...(notes !== undefined && { notes: notes || null })
       },
       include: {
