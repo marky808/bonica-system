@@ -119,6 +119,12 @@ export async function PUT(
     const usedQuantity = existingPurchase.quantity - existingPurchase.remainingQuantity
     if (quantity !== undefined && quantity !== null && quantity !== '') {
       const newQuantity = parseFloat(quantity)
+      if (isNaN(newQuantity)) {
+        return NextResponse.json(
+          { error: '数量には数値を入力してください' },
+          { status: 400 }
+        )
+      }
       if (newQuantity < usedQuantity - 0.001) {
         return NextResponse.json(
           {
