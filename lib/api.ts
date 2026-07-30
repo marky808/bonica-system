@@ -401,7 +401,6 @@ class ApiClient {
     purchaseDate: string
     expiryDate?: string
     deliveryFee?: string
-    status: string
     forceUpdate?: boolean
   }>): Promise<ApiResponse<Purchase> & { requireConfirmation?: boolean; deliveryCount?: number }> {
     return this.request<Purchase>(`/purchases/${id}`, {
