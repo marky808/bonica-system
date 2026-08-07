@@ -226,8 +226,11 @@ export async function POST(request: Request) {
         const itemKey = (item: { purchaseId?: string | null; productName?: string | null }) =>
           item.purchaseId ? `p:${item.purchaseId}` : `n:${item.productName || ''}`
 
+        // マイナス数量（手数料等）の行は物理的な返品対象数量ではないため、
+        // 「返品可能な数量」の集計からは除外する（プラスの数量のみを合算）
         const originalQuantityByKey = new Map<string, number>()
         for (const origItem of originalDelivery.items) {
+          if (origItem.quantity <= 0) continue
           const key = itemKey(origItem)
           originalQuantityByKey.set(key, (originalQuantityByKey.get(key) || 0) + origItem.quantity)
         }
@@ -246,7 +249,11 @@ export async function POST(request: Request) {
           }
         }
 
-        // 今回の返品数量が「元納品の数量 − 既存の赤伝で返品済みの数量」を超えないか検証
+        // 今回の返品数量が「元納品の数量 − 既存の赤伝で返品済みの数量 − 同一リクエスト内で
+        // 既に検証済みの数量」を超えないか検証する。
+        // ※ 同一リクエスト内に同じ商品の返品行が複数あるケースも合算してチェックするため、
+        //   pendingByKey にリクエスト内の消費量を積み上げながら判定する
+        const pendingByKey = new Map<string, number>()
         for (const item of validatedData.items) {
           const key = itemKey(item)
           const originalQuantity = originalQuantityByKey.get(key)
@@ -258,15 +265,18 @@ export async function POST(request: Request) {
           }
 
           const alreadyReturned = alreadyReturnedByKey.get(key) || 0
-          const remainingReturnable = originalQuantity - alreadyReturned
+          const pendingInThisRequest = pendingByKey.get(key) || 0
+          const remainingReturnable = originalQuantity - alreadyReturned - pendingInThisRequest
           const requestedQuantity = Math.abs(item.quantity)
 
           if (requestedQuantity > remainingReturnable) {
             throw new Error(
               `「${item.productName || '指定の商品'}」の返品数量(${requestedQuantity})が返品可能な残数量(${remainingReturnable})を超えています` +
-              `（元の納品数量: ${originalQuantity}、既存の赤伝で返品済み: ${alreadyReturned}）`
+              `（元の納品数量: ${originalQuantity}、既存の赤伝で返品済み: ${alreadyReturned}、今回のリクエスト内で既に指定: ${pendingInThisRequest}）`
             )
           }
+
+          pendingByKey.set(key, pendingInThisRequest + requestedQuantity)
         }
       }
 
