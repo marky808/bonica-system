@@ -95,6 +95,11 @@ export async function PUT(
         throw new Error('Delivery not found')
       }
 
+      // 赤伝（RETURN）は通常納品用の編集フォーム・スキーマでは正しく編集できないため、編集自体を禁止する
+      if (existingDelivery.type === 'RETURN') {
+        throw new Error('赤伝（返品）データはこの画面から編集できません。内容を修正したい場合は削除して登録し直してください。')
+      }
+
       // If updating items, restore original quantities first
       if (validatedData.items) {
         // Restore quantities from original items
@@ -383,9 +388,20 @@ export async function DELETE(
         throw new Error('freee請求書が既に発行されているため、この納品は削除できません。freeeで請求書をキャンセルしてから再度お試しください。')
       }
 
-      // 在庫を復元
+      // 請求済み（INVOICED）の納品は削除できない
+      if (delivery.status === 'INVOICED') {
+        console.error('❌ 請求済みのため削除できません:', id)
+        throw new Error('この納品は既に請求済み（INVOICED）のため削除できません。請求書を再発行（取り消し）して納品ステータスを戻してから、再度お試しください。')
+      }
+
+      // 在庫を復元（赤伝は作成時に在庫を変動させていないため復元も行わない）
       console.log('📦 在庫復元開始...')
       for (const item of delivery.items) {
+        if (delivery.type === 'RETURN') {
+          console.log(`⏭️ 赤伝アイテム: 在庫復元スキップ (商品名: ${item.productName || '不明'})`)
+          continue
+        }
+
         // 直接入力モードの場合（purchaseIdがnull）は在庫復元をスキップ
         if (!item.purchaseId) {
           console.log(`⏭️ 直接入力アイテム: 在庫復元スキップ (商品名: ${item.productName || '不明'})`)

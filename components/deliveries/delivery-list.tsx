@@ -166,6 +166,15 @@ export function DeliveryList({
     return (delivery as any).type === 'RETURN'
   }
 
+  // 赤伝は編集フォームに正しく対応していないため、編集をブロックする
+  const handleEditClick = (delivery: Delivery) => {
+    if (isReturnDelivery(delivery)) {
+      alert('赤伝（返品）は編集できません。内容を修正したい場合は削除して登録し直してください。')
+      return
+    }
+    onEdit(delivery)
+  }
+
   const getCustomerName = (delivery: Delivery) => {
     return delivery.customer?.companyName || "不明"
   }
@@ -468,7 +477,13 @@ export function DeliveryList({
                           <Download className="h-4 w-4" />
                         </Button>
                       )}
-                      <Button variant="outline" size="sm" onClick={() => onEdit(delivery)} className="h-9 w-9 p-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditClick(delivery)}
+                        className="h-9 w-9 p-0"
+                        title={isReturnDelivery(delivery) ? '赤伝は編集できません' : '編集'}
+                      >
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => onDelete(delivery.id)} className="h-9 w-9 p-0">
@@ -579,7 +594,12 @@ export function DeliveryList({
                             <FileText className="h-4 w-4" />
                           </Button>
                         )}
-                        <Button variant="outline" size="sm" onClick={() => onEdit(delivery)}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditClick(delivery)}
+                          title={isReturnDelivery(delivery) ? '赤伝は編集できません' : '編集'}
+                        >
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => onDelete(delivery.id)}>
