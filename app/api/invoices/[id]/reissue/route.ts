@@ -200,10 +200,11 @@ export async function POST(
       total_amount: totalAmount,
     };
 
-    const googleSheetsClient = getGoogleSheetsClient();
-
+    let googleSheetsClient;
     let result;
     try {
+      googleSheetsClient = getGoogleSheetsClient();
+
       // 既存のスプレッドシートIDを渡すことで、同名タブ（{month}月分_{customerName}）が
       // 見つかった場合はそのタブを上書き更新する（lib/google-sheets-client.ts の
       // createOrAddInvoiceToMonthlySheet を参照）。新規タブは作られない。
@@ -216,7 +217,8 @@ export async function POST(
         invoice.googleSheetId
       );
     } catch (sheetError) {
-      // Google Sheets更新に失敗した場合は、旧納品のステータスを請求済みに戻す
+      // Google Sheetsクライアントの初期化・更新のいずれかに失敗した場合、
+      // 旧納品のステータスを請求済みに戻す（DELIVEREDのまま放置しない）
       console.error('❌ Google Sheets更新に失敗、納品ステータスを元に戻します:', sheetError);
       if (oldDeliveryIds.length > 0) {
         await prisma.delivery.updateMany({
@@ -230,27 +232,42 @@ export async function POST(
     const newDeliveryIds = deliveries.map(d => d.id);
 
     // Invoice レコードを同じID・同じ請求書番号のまま更新し、対象納品を請求済みに戻す
-    const updatedInvoice = await prisma.$transaction(async (tx) => {
-      const updated = await tx.invoice.update({
-        where: { id: invoiceId },
-        data: {
-          invoiceDate: new Date(),
-          totalAmount,
-          deliveryIds: JSON.stringify(newDeliveryIds),
-          googleSheetId: result.spreadsheetId,
-          googleSheetUrl: result.spreadsheetUrl,
-          sheetTabName: result.tabName,
-          status: 'ISSUED',
-        },
-      });
+    let updatedInvoice;
+    try {
+      updatedInvoice = await prisma.$transaction(async (tx) => {
+        const updated = await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            invoiceDate: new Date(),
+            totalAmount,
+            deliveryIds: JSON.stringify(newDeliveryIds),
+            googleSheetId: result.spreadsheetId,
+            googleSheetUrl: result.spreadsheetUrl,
+            sheetTabName: result.tabName,
+            status: 'ISSUED',
+          },
+        });
 
-      await tx.delivery.updateMany({
-        where: { id: { in: newDeliveryIds } },
-        data: { status: 'INVOICED' },
-      });
+        await tx.delivery.updateMany({
+          where: { id: { in: newDeliveryIds } },
+          data: { status: 'INVOICED' },
+        });
 
-      return updated;
-    });
+        return updated;
+      });
+    } catch (dbError) {
+      // この時点でGoogle Sheets側は既に新しい内容で上書き済み。
+      // DB更新だけが失敗すると、シート上の金額とDB上の請求書レコードが
+      // 食い違ったまま残るため、手動確認に必要な情報を明示してログに残す。
+      console.error(
+        `🚨 重大: 請求書再発行のDB更新に失敗しました。Google Sheetsは既に新しい内容で上書き済みのため、` +
+        `手動での整合性確認が必要です。invoiceId=${invoiceId}, invoiceNumber=${invoice.invoice_number}, ` +
+        `spreadsheetUrl=${result.spreadsheetUrl}, tabName=${result.tabName}, ` +
+        `oldDeliveryIds=${JSON.stringify(oldDeliveryIds)}, newDeliveryIds=${JSON.stringify(newDeliveryIds)}`,
+        dbError
+      );
+      throw dbError;
+    }
 
     console.log(
       `✅ 請求書再発行完了: ${updatedInvoice.invoice_number} (納品${newDeliveryIds.length}件, 合計${totalAmount}円)`

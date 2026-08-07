@@ -1793,9 +1793,24 @@ class GoogleSheetsClient {
       console.error('⚠️ Placeholder replacement failed (non-critical):', placeholderError.message);
     }
 
+    const itemsStartRow = 11;
+
+    // 明細行数が前回の書き込み時より少ない場合、明細末尾より下に前回の集計・振込先情報
+    // （古い金額など）が上書きされずに残ってしまう（stale data）。既存タブへの再書き込み
+    // （請求書の再発行など）で特に起こりうるため、値を書き込む前に明細開始行から十分広い
+    // 範囲の値をクリアしておく。
+    try {
+      await this.sheets.spreadsheets.values.clear({
+        spreadsheetId: spreadsheetId,
+        range: `'${tabName}'!A${itemsStartRow}:J500`,
+      });
+      console.log('✅ Cleared existing content below header before rewrite');
+    } catch (clearRangeError: any) {
+      console.warn('⚠️ Failed to clear existing sheet content before rewrite:', clearRangeError.message);
+    }
+
     // E列（数量）のフォーマットをクリアしてから値を書き込む
     // テンプレートの「20.」フォーマット問題を回避
-    const itemsStartRow = 11;
     try {
       await this.sheets.spreadsheets.batchUpdate({
         spreadsheetId: spreadsheetId,
