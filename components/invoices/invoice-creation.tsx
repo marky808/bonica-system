@@ -256,11 +256,10 @@ export function InvoiceCreation({ onInvoiceGenerated }: InvoiceCreationProps) {
     const confirmed = window.confirm(
       `${data.customerName}の${currentMonthOption.label}分 請求書を再発行します。\n\n` +
       `■ 実行内容\n` +
-      `・既存の請求書レコードを削除します\n` +
-      `・紐付く納品 ${data.deliveryCount}件 を「請求済み」から「納品済み」に戻します\n` +
-      `・新しいGoogle Sheetsスプレッドシート（タブ）を作成します\n\n` +
-      `■ 注意\n` +
-      `・古いGoogle Sheetsのタブは履歴として残ります（必要なら手動で削除してください）\n\n` +
+      `・同じ請求書番号のまま、最新の納品内容で内容を更新します\n` +
+      `・対象期間内の納品を全件（新しく追加された分も含めて）再集計します\n` +
+      `・既存のGoogle Sheetsのシートをそのまま上書きします（新しいタブは作成されません）\n` +
+      `・発行日は本日の日付に更新されます\n\n` +
       `続行しますか？`
     )
 
@@ -271,39 +270,21 @@ export function InvoiceCreation({ onInvoiceGenerated }: InvoiceCreationProps) {
     setSuccess('')
 
     try {
-      const resetResponse = await apiClient.request(`/invoices/${data.invoiceId}/reset`, {
+      const response = await apiClient.request(`/invoices/${data.invoiceId}/reissue`, {
         method: 'POST',
       })
 
-      if (resetResponse.error) {
-        setError(`請求書のリセットに失敗しました: ${resetResponse.error}`)
-        return
-      }
-
-      const createResponse = await apiClient.request('/invoices/monthly', {
-        method: 'POST',
-        body: JSON.stringify({
-          customerId: data.customerId,
-          year: currentMonthOption.year,
-          month: currentMonthOption.month,
-        }),
-      })
-
-      if (createResponse.data) {
+      if (response.data) {
         alert(
           `${data.customerName}の請求書を再発行しました\n` +
-          `請求書ID: ${createResponse.data.invoiceId}\n` +
-          `合計金額: ${formatCurrency(createResponse.data.totalAmount)}\n\n` +
-          `※古いGoogle Sheetsのタブは履歴として残っています。必要なら手動で削除してください。`
+          `請求書番号: ${response.data.invoiceNumber}\n` +
+          `合計金額: ${formatCurrency(response.data.totalAmount)}\n` +
+          `対象納品件数: ${response.data.deliveryCount}件`
         )
         await loadMonthlyData(currentMonthOption.year, currentMonthOption.month, selectedCustomer)
         onInvoiceGenerated?.(data.customerId, currentMonthOption.year, currentMonthOption.month)
       } else {
-        setError(
-          `リセットは成功しましたが、再作成に失敗しました: ${createResponse.error}\n` +
-          `「請求書作成」ボタンから再度作成してください。`
-        )
-        await loadMonthlyData(currentMonthOption.year, currentMonthOption.month, selectedCustomer)
+        setError(response.error || '請求書の再発行に失敗しました')
       }
     } catch (err) {
       setError('再発行中に通信エラーが発生しました')
