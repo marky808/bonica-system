@@ -62,6 +62,10 @@ export function DeliveryDetailModal({
   }
 
   const handleEdit = () => {
+    if (isReturnDelivery()) {
+      alert('赤伝（返品）は編集できません。内容を修正したい場合は削除して登録し直してください。')
+      return
+    }
     onEdit(delivery)
     onClose()
   }
@@ -472,7 +476,11 @@ export function DeliveryDetailModal({
 
           {/* アクションボタン */}
           <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
-            <Button onClick={handleEdit} className="flex-1 h-12">
+            <Button
+              onClick={handleEdit}
+              className="flex-1 h-12"
+              title={isReturnDelivery() ? '赤伝は編集できません' : undefined}
+            >
               <Edit className="h-4 w-4 mr-2" />
               編集
             </Button>

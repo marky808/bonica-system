@@ -211,6 +211,7 @@ export async function POST(request: Request) {
       if (isReturn && validatedData.originalDeliveryId) {
         const originalDelivery = await tx.delivery.findUnique({
           where: { id: validatedData.originalDeliveryId },
+          include: { items: true },
         })
         if (!originalDelivery) {
           throw new Error('元の納品データが見つかりません')
@@ -218,6 +219,54 @@ export async function POST(request: Request) {
         // 赤伝の顧客は元の納品と同じである必要がある
         if (originalDelivery.customerId !== validatedData.customerId) {
           throw new Error('赤伝の顧客は元の納品と同じ顧客を選択してください')
+        }
+
+        // 元納品の明細ごとの数量、および既存の赤伝で既に返品済みの数量を集計するキー
+        // purchaseIdがあればそれで、なければ商品名で明細を対応付ける
+        const itemKey = (item: { purchaseId?: string | null; productName?: string | null }) =>
+          item.purchaseId ? `p:${item.purchaseId}` : `n:${item.productName || ''}`
+
+        const originalQuantityByKey = new Map<string, number>()
+        for (const origItem of originalDelivery.items) {
+          const key = itemKey(origItem)
+          originalQuantityByKey.set(key, (originalQuantityByKey.get(key) || 0) + origItem.quantity)
+        }
+
+        // 同じ元納品に対する既存の赤伝を取得し、既に返品済みの数量を集計
+        const existingReturns = await tx.delivery.findMany({
+          where: { originalDeliveryId: validatedData.originalDeliveryId, type: 'RETURN' },
+          include: { items: true },
+        })
+
+        const alreadyReturnedByKey = new Map<string, number>()
+        for (const existingReturn of existingReturns) {
+          for (const retItem of existingReturn.items) {
+            const key = itemKey(retItem)
+            alreadyReturnedByKey.set(key, (alreadyReturnedByKey.get(key) || 0) + Math.abs(retItem.quantity))
+          }
+        }
+
+        // 今回の返品数量が「元納品の数量 − 既存の赤伝で返品済みの数量」を超えないか検証
+        for (const item of validatedData.items) {
+          const key = itemKey(item)
+          const originalQuantity = originalQuantityByKey.get(key)
+
+          if (originalQuantity === undefined) {
+            throw new Error(
+              `「${item.productName || '指定の商品'}」は元の納品に含まれていないため返品できません`
+            )
+          }
+
+          const alreadyReturned = alreadyReturnedByKey.get(key) || 0
+          const remainingReturnable = originalQuantity - alreadyReturned
+          const requestedQuantity = Math.abs(item.quantity)
+
+          if (requestedQuantity > remainingReturnable) {
+            throw new Error(
+              `「${item.productName || '指定の商品'}」の返品数量(${requestedQuantity})が返品可能な残数量(${remainingReturnable})を超えています` +
+              `（元の納品数量: ${originalQuantity}、既存の赤伝で返品済み: ${alreadyReturned}）`
+            )
+          }
         }
       }
 
