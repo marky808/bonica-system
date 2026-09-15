@@ -11,30 +11,49 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || ''
+    const includeIds = (searchParams.get('includeIds') || '')
+      .split(',')
+      .map(id => id.trim())
+      .filter(Boolean)
 
-    // Get purchases with remaining quantity > 0
-    const whereClause: any = {
-      remainingQuantity: {
-        gt: 0,
-      },
-    }
+    // Get purchases with remaining quantity > 0.
+    // includeIds が指定された場合は、そのIDのPurchaseは在庫0以下でも結果に含める
+    // （編集中の納品が既に使い切った仕入れを候補から失わないため）。
+    const stockOrIncludeClause: any =
+      includeIds.length > 0
+        ? {
+            OR: [
+              { remainingQuantity: { gt: 0 } },
+              { id: { in: includeIds } },
+            ],
+          }
+        : {
+            remainingQuantity: { gt: 0 },
+          }
 
-    if (search) {
-      whereClause.OR = [
-        {
-          productName: {
-            contains: search,
-          },
-        },
-        {
-          category: {
-            name: {
-              contains: search,
+    const whereClause: any = search
+      ? {
+          AND: [
+            stockOrIncludeClause,
+            {
+              OR: [
+                {
+                  productName: {
+                    contains: search,
+                  },
+                },
+                {
+                  category: {
+                    name: {
+                      contains: search,
+                    },
+                  },
+                },
+              ],
             },
-          },
-        },
-      ]
-    }
+          ],
+        }
+      : stockOrIncludeClause
 
     const availablePurchases = await prisma.purchase.findMany({
       where: whereClause,
