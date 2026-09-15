@@ -100,9 +100,21 @@ export function DeliveryForm({ onSubmit, onCancel, initialData }: DeliveryFormPr
       setError('')
       
       try {
+        // 編集時は、既に在庫を使い切った(remainingQuantity<=0)仕入れであっても
+        // このフォームで選択中の商品として候補に残す必要がある
+        const editingPurchaseIds = Array.from(
+          new Set(
+            (initialData?.items || [])
+              .map(item => item.purchaseId)
+              .filter((id): id is string => !!id)
+          )
+        )
+
         const [customersRes, purchasesRes] = await Promise.all([
           apiClient.getCustomers(),
-          apiClient.getAvailablePurchases()
+          apiClient.getAvailablePurchases(
+            editingPurchaseIds.length > 0 ? { includeIds: editingPurchaseIds } : {}
+          )
         ])
         
         if (customersRes.data && Array.isArray(customersRes.data)) {

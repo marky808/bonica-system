@@ -562,11 +562,12 @@ class ApiClient {
   // Available purchases (stock) methods
   async getAvailablePurchases(params: {
     search?: string
+    includeIds?: string[]
   } = {}): Promise<ApiResponse<Purchase[]>> {
     const searchParams = new URLSearchParams()
     
     Object.entries(params).forEach(([key, value]) => {
-      if (value) {
+      if (Array.isArray(value) ? value.length > 0 : value) {
         searchParams.append(key, value.toString())
       }
     })
