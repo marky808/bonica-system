@@ -1,19 +1,25 @@
 /**
  * 12社向け請求書一括発行スクリプト
  *
- * 実行: source .env.vercel.production && npx tsx scripts/create-invoices-batch.ts
+ * 実行: ADMIN_LOGIN_EMAIL=xxx ADMIN_LOGIN_PASSWORD=xxx npx tsx scripts/create-invoices-batch.ts
  */
 
 const API_BASE = 'https://bonica-system.vercel.app';
 
+const EMAIL = process.env.ADMIN_LOGIN_EMAIL;
+const PASSWORD = process.env.ADMIN_LOGIN_PASSWORD;
+
 // 認証トークンを取得
 async function getToken(): Promise<string> {
+  if (!EMAIL || !PASSWORD) {
+    throw new Error('ADMIN_LOGIN_EMAIL / ADMIN_LOGIN_PASSWORD が設定されていません');
+  }
   const response = await fetch(`${API_BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      email: '808works@gmail.com',
-      password: '6391'
+      email: EMAIL,
+      password: PASSWORD
     })
   });
   const data = await response.json();
